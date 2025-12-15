@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyvenue"
+version = "0.1.0"
+description = "Educational exchange / matching engine in Python 3.13 (correctness first, then performance)."
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [{name = "Amar Cutura"}]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "black>=24.10.0",
+  "pytest>=8.3.0",
+  "pyright>=1.1.390",
+  "ruff>=0.8.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["src", "tests"]
+fix = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = [
+  # let black handle line length
+  "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+venvPath = "."
+exclude = ["**/__pycache__", ".venv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
