@@ -16,7 +16,7 @@ class Side(str, Enum):
 @dataclass(frozen=True, slots=True)
 class Price:
     """Price in integer ticks."""
-    
+
     ticks: int
 
 
