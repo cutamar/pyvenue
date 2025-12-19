@@ -3,18 +3,50 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pyvenue.domain.types import Instrument, OrderId
+from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class OrderAccepted:
-    type: Literal["OrderAccepted"] = "OrderAccepted"
-    instrument: Instrument = field(default_factory=Instrument)
-    order_id: OrderId = field(default_factory=OrderId)
+    type: Literal["OrderAccepted"] = field(default="OrderAccepted", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    order_id: OrderId
+    side: Side
+    price: Price
+    qty: Qty
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class OrderRejected:
-    type: Literal["OrderRejected"] = "OrderRejected"
-    instrument: Instrument = field(default_factory=Instrument)
-    order_id: OrderId = field(default_factory=OrderId)
+    type: Literal["OrderRejected"] = field(default="OrderRejected", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    order_id: OrderId
+    reason: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OrderCanceled:
+    type: Literal["OrderCanceled"] = field(default="OrderCanceled", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    order_id: OrderId
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TradeOccurred:
+    type: Literal["TradeOccurred"] = field(default="TradeOccurred", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    taker_order_id: OrderId
+    maker_order_id: OrderId
+    price: Price
+    qty: Qty
+
+
+Event = OrderAccepted | OrderRejected | OrderCanceled | TradeOccurred

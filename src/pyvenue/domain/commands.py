@@ -1,16 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import dataclass
 
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PlaceLimit:
-    type: Literal["PlaceLimit"] = "PlaceLimit"
-    instrument: Instrument = field(default_factory=Instrument)
-    order_id: OrderId = field(default_factory=OrderId)
-    side: Side = field(default=Side.BUY)
-    price: Price = field(default_factory=lambda: Price(0))
-    qty: Qty = field(default_factory=lambda: Qty(0))
+    instrument: Instrument
+    order_id: OrderId
+    side: Side
+    price: Price
+    qty: Qty
+    client_ts_ns: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Cancel:
+    instrument: Instrument
+    order_id: OrderId
+    client_ts_ns: int
+
+
+Command = PlaceLimit | Cancel
