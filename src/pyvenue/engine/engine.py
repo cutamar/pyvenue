@@ -22,8 +22,10 @@ class Engine:
     def _next_meta(self) -> tuple[int, int]:
         self.seq += 1
         return self.seq, self.clock.now_ns()
-    
-    def _reject(self, instrument: Instrument, order_id: OrderId, reason: str) -> OrderRejected:
+
+    def _reject(
+        self, instrument: Instrument, order_id: OrderId, reason: str
+    ) -> OrderRejected:
         seq, ts = self._next_meta()
         return OrderRejected(
             seq=seq,

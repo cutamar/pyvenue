@@ -27,7 +27,9 @@ def test_determinism_same_commands_same_events():
             qty=Qty(5),
             client_ts_ns=1,
         ),
-        Cancel(instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2),
+        Cancel(
+            instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2
+        ),
     ]
 
     e1 = Engine(clock=FixedClock(999))
@@ -52,7 +54,9 @@ def test_replay_events_rebuilds_same_state():
             client_ts_ns=1,
         )
     )
-    engine.submit(Cancel(instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2))
+    engine.submit(
+        Cancel(instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2)
+    )
 
     events = engine.log.all()
 
