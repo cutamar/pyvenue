@@ -25,4 +25,3 @@ pytest -q
 ## Project structure
 - `src/pyvenue/` — library code
 - `tests/` — pytest tests
-- `SPEC.md` — the functional spec we evolve milestone-by-milestone
