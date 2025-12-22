@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.events import Event
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 from pyvenue.infra.clock import Clock
-
 
 # ----------------------------
 # Test helpers
@@ -84,6 +83,7 @@ def cancel(engine: Engine, *, oid: str, client_ts_ns: int) -> list[Event]:
 # Milestone 2 tests
 # ----------------------------
 
+
 def test_single_match_full_fill_trade_at_maker_price():
     """
     Resting ask: a1 5 @ 100
@@ -142,7 +142,12 @@ def test_sweep_multiple_price_levels_and_leave_remainder():
     place(e, oid="a3", side=Side.SELL, price=102, qty=5, client_ts_ns=3)
 
     ev_b1 = place(e, oid="b1", side=Side.BUY, price=102, qty=10, client_ts_ns=4)
-    assert types(ev_b1) == ["OrderAccepted", "TradeOccurred", "TradeOccurred", "TradeOccurred"]
+    assert types(ev_b1) == [
+        "OrderAccepted",
+        "TradeOccurred",
+        "TradeOccurred",
+        "TradeOccurred",
+    ]
 
     assert_trade(ev_b1[1], taker="b1", maker="a1", price_ticks=100, qty_lots=3)
     assert_trade(ev_b1[2], taker="b1", maker="a2", price_ticks=101, qty_lots=4)
@@ -230,7 +235,9 @@ def test_sequence_numbers_are_monotonic():
     events: list[Event] = []
     events += place(e, oid="a1", side=Side.SELL, price=100, qty=2, client_ts_ns=1)  # 1
     events += place(e, oid="b1", side=Side.BUY, price=100, qty=1, client_ts_ns=2)  # 2,3
-    events += cancel(e, oid="a1", client_ts_ns=3)  # maybe 4 (if a1 still active), or reject if already filled
+    events += cancel(
+        e, oid="a1", client_ts_ns=3
+    )  # maybe 4 (if a1 still active), or reject if already filled
 
     seqs = [ev.seq for ev in events]
     assert seqs == list(range(seqs[0], seqs[0] + len(seqs)))
