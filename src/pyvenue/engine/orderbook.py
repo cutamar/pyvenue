@@ -24,6 +24,9 @@ class Fill:
 
 @dataclass(slots=True)
 class PriceLevel:
+    """A price level in the order book.
+    Adding a duplicate order_id will overwrite the existing order."""
+
     price: Price
     orders: OrderedDict[OrderId, RestingOrder]
 
@@ -52,5 +55,35 @@ class PriceLevel:
 
 
 class OrderBook:
-    def __init__(self) -> None:
-        pass
+    """An order book for a single instrument."""
+    instrument: Instrument
+    bids: OrderedDict[int, PriceLevel]
+    asks: OrderedDict[int, PriceLevel]
+    bid_prices: list[int]
+    ask_prices: list[int]
+
+    def __init__(self, instrument: Instrument) -> None:
+        self.instrument = instrument
+        self.bids = OrderedDict()
+        self.asks = OrderedDict()
+        self.bid_prices = []
+        self.ask_prices = []
+    
+    def best_bid(self) -> int | None:
+        return self.bid_prices[-1] if self.bid_prices else None
+    
+    def best_ask(self) -> int | None:
+        return self.ask_prices[0] if self.ask_prices else None
+
+    def place_limit(self, order: RestingOrder) -> None:
+        price = order.price.ticks
+        if order.side == Side.BUY:
+            if price not in self.bids:
+                self.bids[price] = PriceLevel(order.price)
+            self.bids[price].add(order)
+            bisect.insort(self.bid_prices, price)
+        else:
+            if price not in self.asks:
+                self.asks[price] = PriceLevel(order.price)
+            self.asks[price].add(order)
+            bisect.insort(self.ask_prices, price)
