@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 from collections import OrderedDict
 from dataclasses import dataclass
 
@@ -56,6 +57,7 @@ class PriceLevel:
 
 class OrderBook:
     """An order book for a single instrument."""
+
     instrument: Instrument
     bids: OrderedDict[int, PriceLevel]
     asks: OrderedDict[int, PriceLevel]
@@ -68,10 +70,10 @@ class OrderBook:
         self.asks = OrderedDict()
         self.bid_prices = []
         self.ask_prices = []
-    
+
     def best_bid(self) -> int | None:
         return self.bid_prices[-1] if self.bid_prices else None
-    
+
     def best_ask(self) -> int | None:
         return self.ask_prices[0] if self.ask_prices else None
 
