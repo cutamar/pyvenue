@@ -63,6 +63,7 @@ class OrderBook:
     asks: OrderedDict[int, PriceLevel]
     bid_prices: list[int]
     ask_prices: list[int]
+    price_level_by_order_id: dict[OrderId, (Side, PriceLevel)]
 
     def __init__(self, instrument: Instrument) -> None:
         self.instrument = instrument
@@ -70,6 +71,7 @@ class OrderBook:
         self.asks = OrderedDict()
         self.bid_prices = []
         self.ask_prices = []
+        self.price_level_by_order_id = {}
 
     def best_bid(self) -> int | None:
         return self.bid_prices[-1] if self.bid_prices else None
@@ -84,8 +86,20 @@ class OrderBook:
                 self.bids[price] = PriceLevel(order.price)
             self.bids[price].add(order)
             bisect.insort(self.bid_prices, price)
-        else:
+            self.price_level_by_order_id[order.order_id] = (order.side, self.bids[price])
+        elif order.side == Side.SELL:
             if price not in self.asks:
                 self.asks[price] = PriceLevel(order.price)
             self.asks[price].add(order)
             bisect.insort(self.ask_prices, price)
+            self.price_level_by_order_id[order.order_id] = (order.side, self.asks[price])
+    
+    def cancel(self, order_id: OrderId) -> None:
+        side, price_level = self.price_level_by_order_id.get(order_id, None)
+        if side is None:
+            return
+        if side == Side.BUY:
+            self.bids[price_level.price].cancel(order_id)
+        elif side == Side.SELL:
+            self.asks[price_level.price].cancel(order_id)
+        self.price_level_by_order_id.pop(order_id, None)
