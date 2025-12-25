@@ -95,7 +95,7 @@ class OrderBook:
             self.orders_by_id[order.order_id] = (Side.SELL, price)
         else:
             raise ValueError(f"Invalid side: {order.side}")
-    
+
     def cancel(self, order_id: OrderId) -> bool:
         loc = self.orders_by_id.get(order_id, None)
         if loc is None:
