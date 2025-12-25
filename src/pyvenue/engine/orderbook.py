@@ -63,7 +63,7 @@ class OrderBook:
     asks: dict[int, PriceLevel]
     bid_prices: list[int]
     ask_prices: list[int]
-    orders_by_id: dict[OrderId, (Side, int)]
+    orders_by_id: dict[OrderId, tuple[Side, int]]
 
     def __init__(self, instrument: Instrument) -> None:
         self.instrument = instrument
@@ -93,20 +93,29 @@ class OrderBook:
                 self.asks[price] = PriceLevel(order.price)
             self.asks[price].add(order)
             self.orders_by_id[order.order_id] = (Side.SELL, price)
+        else:
+            raise ValueError(f"Invalid side: {order.side}")
     
-    def cancel(self, order_id: OrderId) -> None:
+    def cancel(self, order_id: OrderId) -> bool:
         loc = self.orders_by_id.get(order_id, None)
         if loc is None:
-            return
+            return False
         side, price = loc
         if side == Side.BUY:
+            if price not in self.bids:
+                return False
             self.bids[price].cancel(order_id)
             if not self.bids[price]:
-                self.bid_prices.remove(price)
+                i = bisect.bisect_left(self.bid_prices, price)
+                self.bid_prices.pop(i)
                 del self.bids[price]
         elif side == Side.SELL:
+            if price not in self.asks:
+                return False
             self.asks[price].cancel(order_id)
             if not self.asks[price]:
-                self.ask_prices.remove(price)
+                i = bisect.bisect_left(self.ask_prices, price)
+                self.ask_prices.pop(i)
                 del self.asks[price]
         self.orders_by_id.pop(order_id, None)
+        return True
