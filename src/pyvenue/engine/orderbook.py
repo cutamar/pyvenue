@@ -59,19 +59,19 @@ class OrderBook:
     """An order book for a single instrument."""
 
     instrument: Instrument
-    bids: OrderedDict[int, PriceLevel]
-    asks: OrderedDict[int, PriceLevel]
+    bids: dict[int, PriceLevel]
+    asks: dict[int, PriceLevel]
     bid_prices: list[int]
     ask_prices: list[int]
-    price_level_by_order_id: dict[OrderId, (Side, PriceLevel)]
+    orders_by_id: dict[OrderId, (Side, int)]
 
     def __init__(self, instrument: Instrument) -> None:
         self.instrument = instrument
-        self.bids = OrderedDict()
-        self.asks = OrderedDict()
+        self.bids = {}
+        self.asks = {}
         self.bid_prices = []
         self.ask_prices = []
-        self.price_level_by_order_id = {}
+        self.orders_by_id = {}
 
     def best_bid(self) -> int | None:
         return self.bid_prices[-1] if self.bid_prices else None
@@ -83,23 +83,30 @@ class OrderBook:
         price = order.price.ticks
         if order.side == Side.BUY:
             if price not in self.bids:
+                bisect.insort(self.bid_prices, price)
                 self.bids[price] = PriceLevel(order.price)
             self.bids[price].add(order)
-            bisect.insort(self.bid_prices, price)
-            self.price_level_by_order_id[order.order_id] = (order.side, self.bids[price])
+            self.orders_by_id[order.order_id] = (Side.BUY, price)
         elif order.side == Side.SELL:
             if price not in self.asks:
+                bisect.insort(self.ask_prices, price)
                 self.asks[price] = PriceLevel(order.price)
             self.asks[price].add(order)
-            bisect.insort(self.ask_prices, price)
-            self.price_level_by_order_id[order.order_id] = (order.side, self.asks[price])
+            self.orders_by_id[order.order_id] = (Side.SELL, price)
     
     def cancel(self, order_id: OrderId) -> None:
-        side, price_level = self.price_level_by_order_id.get(order_id, None)
-        if side is None:
+        loc = self.orders_by_id.get(order_id, None)
+        if loc is None:
             return
+        side, price = loc
         if side == Side.BUY:
-            self.bids[price_level.price].cancel(order_id)
+            self.bids[price].cancel(order_id)
+            if not self.bids[price]:
+                self.bid_prices.remove(price)
+                del self.bids[price]
         elif side == Side.SELL:
-            self.asks[price_level.price].cancel(order_id)
-        self.price_level_by_order_id.pop(order_id, None)
+            self.asks[price].cancel(order_id)
+            if not self.asks[price]:
+                self.ask_prices.remove(price)
+                del self.asks[price]
+        self.orders_by_id.pop(order_id, None)
