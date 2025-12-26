@@ -102,20 +102,32 @@ class OrderBook:
             return False
         side, price = loc
         if side == Side.BUY:
-            if price not in self.bids:
-                return False
-            self.bids[price].cancel(order_id)
-            if not self.bids[price]:
-                i = bisect.bisect_left(self.bid_prices, price)
-                self.bid_prices.pop(i)
+            price_level = self.bids.get(price)
+            if price_level is None:
+                raise RuntimeError(f"Bid price level {price} not found")
+            ok = price_level.cancel(order_id)
+            if not ok:
+                raise RuntimeError(f"Order {order_id} not found in expected level {price}")
+            if not price_level:
                 del self.bids[price]
+                i = bisect.bisect_left(self.bid_prices, price)
+                if i >= len(self.bid_prices) or self.bid_prices[i] != price:
+                    raise RuntimeError(f"Bid prices out of sync for price: {price}")
+                self.bid_prices.pop(i)
         elif side == Side.SELL:
-            if price not in self.asks:
-                return False
-            self.asks[price].cancel(order_id)
-            if not self.asks[price]:
-                i = bisect.bisect_left(self.ask_prices, price)
-                self.ask_prices.pop(i)
+            price_level = self.asks.get(price)
+            if price_level is None: 
+                raise RuntimeError(f"Ask price level {price} not found")
+            ok = price_level.cancel(order_id)
+            if not ok:
+                raise RuntimeError(f"Order {order_id} not found in expected level {price}")
+            if not price_level:
                 del self.asks[price]
+                i = bisect.bisect_left(self.ask_prices, price)
+                if i >= len(self.ask_prices) or self.ask_prices[i] != price:
+                    raise RuntimeError(f"Ask prices out of sync for price: {price}")
+                self.ask_prices.pop(i)
+        else:
+            raise RuntimeError(f"Invalid side: {side}")
         self.orders_by_id.pop(order_id, None)
         return True
