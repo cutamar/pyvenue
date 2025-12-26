@@ -107,7 +107,9 @@ class OrderBook:
                 raise RuntimeError(f"Bid price level {price} not found")
             ok = price_level.cancel(order_id)
             if not ok:
-                raise RuntimeError(f"Order {order_id} not found in expected level {price}")
+                raise RuntimeError(
+                    f"Order {order_id} not found in expected level {price}"
+                )
             if not price_level:
                 del self.bids[price]
                 i = bisect.bisect_left(self.bid_prices, price)
@@ -116,11 +118,13 @@ class OrderBook:
                 self.bid_prices.pop(i)
         elif side == Side.SELL:
             price_level = self.asks.get(price)
-            if price_level is None: 
+            if price_level is None:
                 raise RuntimeError(f"Ask price level {price} not found")
             ok = price_level.cancel(order_id)
             if not ok:
-                raise RuntimeError(f"Order {order_id} not found in expected level {price}")
+                raise RuntimeError(
+                    f"Order {order_id} not found in expected level {price}"
+                )
             if not price_level:
                 del self.asks[price]
                 i = bisect.bisect_left(self.ask_prices, price)
