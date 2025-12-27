@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from functools import singledispatchmethod
 
 from pyvenue.domain.commands import Cancel, Command, PlaceLimit
-from pyvenue.domain.events import Event, OrderAccepted, OrderCanceled, OrderRejected, TradeOccurred
+from pyvenue.domain.events import (
+    Event,
+    OrderAccepted,
+    OrderCanceled,
+    OrderRejected,
+    TradeOccurred,
+)
 from pyvenue.domain.types import Instrument, OrderId
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState
@@ -13,7 +19,7 @@ from pyvenue.infra import Clock, EventLog, SystemClock
 
 @dataclass(slots=True)
 class Engine:
-    instrument: Instrument = field(default="BTC-USD")
+    instrument: Instrument = field(default=Instrument("BTC-USD"))
     clock: Clock = field(default_factory=SystemClock)
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
@@ -66,7 +72,7 @@ class Engine:
             ]
 
         seq, ts = self._next_meta()
-        events = [
+        events: list[Event] = [
             OrderAccepted(
                 seq=seq,
                 ts_ns=ts,
@@ -96,6 +102,7 @@ class Engine:
                     taker_order_id=command.order_id,
                     maker_order_id=fill_event.maker_order_id,
                     qty=fill_event.qty,
+                    price=fill_event.maker_price,
                 )
             )
         return events

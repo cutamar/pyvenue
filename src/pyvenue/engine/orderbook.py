@@ -94,7 +94,8 @@ class OrderBook:
         else:
             raise ValueError(f"Invalid side: {order.side}")
         self.orders_by_id[order.order_id] = (order.side, price)
-        return self._match(order.side, price, order.remaining)
+        fills, _ = self._match(order.side, price, order.remaining.lots)
+        return fills
 
     def cancel(self, order_id: OrderId) -> None:
         loc = self.orders_by_id.get(order_id, None)
@@ -117,43 +118,51 @@ class OrderBook:
         if side == Side.BUY:
             if price_ticks not in self.bids:
                 bisect.insort(self.bid_prices, price_ticks)
-                self.bids[price_ticks] = PriceLevel(price_ticks)
+                self.bids[price_ticks] = PriceLevel(Price(price_ticks))
             return self.bids[price_ticks]
         elif side == Side.SELL:
             if price_ticks not in self.asks:
                 bisect.insort(self.ask_prices, price_ticks)
-                self.asks[price_ticks] = PriceLevel(price_ticks)
+                self.asks[price_ticks] = PriceLevel(Price(price_ticks))
             return self.asks[price_ticks]
         else:
             raise ValueError(f"Invalid side: {side}")
-    
+
     def _remove_level_if_empty(self, side: Side, price_ticks: int) -> None:
         if side == Side.BUY:
             if price_ticks in self.bids and not self.bids[price_ticks]:
                 del self.bids[price_ticks]
                 i = bisect.bisect_left(self.bid_prices, price_ticks)
                 if i >= len(self.bid_prices) or self.bid_prices[i] != price_ticks:
-                    raise RuntimeError(f"Bid prices out of sync for price: {price_ticks}")
+                    raise RuntimeError(
+                        f"Bid prices out of sync for price: {price_ticks}"
+                    )
                 self.bid_prices.pop(i)
         elif side == Side.SELL:
             if price_ticks in self.asks and not self.asks[price_ticks]:
                 del self.asks[price_ticks]
                 i = bisect.bisect_left(self.ask_prices, price_ticks)
                 if i >= len(self.ask_prices) or self.ask_prices[i] != price_ticks:
-                    raise RuntimeError(f"Ask prices out of sync for price: {price_ticks}")
+                    raise RuntimeError(
+                        f"Ask prices out of sync for price: {price_ticks}"
+                    )
                 self.ask_prices.pop(i)
         else:
             raise ValueError(f"Invalid side: {side}")
 
-    def _crosses(self, taker_side: Side, taker_price_ticks: int, best_opp_price_ticks: int) -> bool:
+    def _crosses(
+        self, taker_side: Side, taker_price_ticks: int, best_opp_price_ticks: int
+    ) -> bool:
         if taker_side == Side.BUY:
             return taker_price_ticks >= best_opp_price_ticks
         elif taker_side == Side.SELL:
             return taker_price_ticks <= best_opp_price_ticks
         else:
             raise ValueError(f"Invalid side: {taker_side}")
-    
-    def _match(self, taker_side: Side, taker_price_ticks: int, taker_qty_lots: int) -> tuple[list[Fill], int]:
+
+    def _match(
+        self, taker_side: Side, taker_price_ticks: int, taker_qty_lots: int
+    ) -> tuple[list[Fill], int]:
         if taker_side == Side.BUY:
             best_opp_price_ticks = self.best_ask()
             maker_side = Side.SELL
@@ -168,21 +177,23 @@ class OrderBook:
             return [], taker_qty_lots
         maker_level = self._ensure_level(maker_side, best_opp_price_ticks)
         maker_order = maker_level.peek_oldest()
+        if maker_order is None:
+            return [], taker_qty_lots
         fills = []
         # TODO: match next best opposite price level if current is fully matched
-        while taker_qty_lots > 0 and maker_order.qty > 0:
+        while taker_qty_lots > 0 and maker_order.remaining.lots > 0:
             maker_order = maker_level.pop_oldest()
-            fill_qty_lots = min(taker_qty_lots, maker_order.qty)
+            fill_qty_lots = min(taker_qty_lots, maker_order.remaining.lots)
             fills.append(
                 Fill(
                     maker_order_id=maker_order.order_id,
                     maker_price=Price(best_opp_price_ticks),
-                    qty=fill_qty_lots,
+                    qty=Qty(fill_qty_lots),
                 )
             )
             taker_qty_lots -= fill_qty_lots
-            maker_order.qty -= fill_qty_lots
-            if maker_order.qty == 0:
+            maker_order.remaining = Qty(maker_order.remaining.lots - fill_qty_lots)
+            if maker_order.remaining.lots == 0:
                 maker_level.cancel(maker_order.order_id)
                 self._remove_level_if_empty(maker_side, best_opp_price_ticks)
                 maker_order = maker_level.peek_oldest()
