@@ -4,20 +4,24 @@ from dataclasses import dataclass, field
 from functools import singledispatchmethod
 
 from pyvenue.domain.commands import Cancel, Command, PlaceLimit
-from pyvenue.domain.events import Event, OrderAccepted, OrderCanceled, OrderRejected
+from pyvenue.domain.events import Event, OrderAccepted, OrderCanceled, OrderRejected, TradeOccurred
 from pyvenue.domain.types import Instrument, OrderId
-from pyvenue.engine.orderbook import OrderBook
+from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState
 from pyvenue.infra import Clock, EventLog, SystemClock
 
 
 @dataclass(slots=True)
 class Engine:
+    instrument: Instrument = field(default="BTC-USD")
     clock: Clock = field(default_factory=SystemClock)
-    book: OrderBook = field(default_factory=OrderBook)
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
     seq: int = field(default=0)
+    book: OrderBook = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.book = OrderBook(self.instrument)
 
     def _next_meta(self) -> tuple[int, int]:
         self.seq += 1
@@ -62,7 +66,7 @@ class Engine:
             ]
 
         seq, ts = self._next_meta()
-        return [
+        events = [
             OrderAccepted(
                 seq=seq,
                 ts_ns=ts,
@@ -73,6 +77,28 @@ class Engine:
                 qty=command.qty,
             )
         ]
+        fill_events = self.book.place_limit(
+            RestingOrder(
+                order_id=command.order_id,
+                instrument=command.instrument,
+                side=command.side,
+                price=command.price,
+                remaining=command.qty,
+            )
+        )
+        for fill_event in fill_events:
+            seq, ts = self._next_meta()
+            events.append(
+                TradeOccurred(
+                    seq=seq,
+                    ts_ns=ts,
+                    instrument=command.instrument,
+                    taker_order_id=command.order_id,
+                    maker_order_id=fill_event.maker_order_id,
+                    qty=fill_event.qty,
+                )
+            )
+        return events
 
     @handle.register
     def _(self, command: Cancel) -> list[Event]:
@@ -88,6 +114,7 @@ class Engine:
                 )
             ]
 
+        self.book.cancel(command.order_id)
         seq, ts = self._next_meta()
         return [
             OrderCanceled(
