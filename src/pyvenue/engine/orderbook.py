@@ -62,15 +62,13 @@ class PriceLevel:
 class OrderBook:
     """An order book for a single instrument."""
 
-    instrument: Instrument
     bids: dict[int, PriceLevel]
     asks: dict[int, PriceLevel]
     bid_prices: list[int]
     ask_prices: list[int]
     orders_by_id: dict[OrderId, tuple[Side, int]]
 
-    def __init__(self, instrument: Instrument) -> None:
-        self.instrument = instrument
+    def __init__(self) -> None:
         self.bids = {}
         self.asks = {}
         self.bid_prices = []

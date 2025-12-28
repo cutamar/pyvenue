@@ -13,21 +13,17 @@ from pyvenue.domain.events import (
 )
 from pyvenue.domain.types import Instrument, OrderId
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
-from pyvenue.engine.state import EngineState
+from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import Clock, EventLog, SystemClock
 
 
 @dataclass(slots=True)
 class Engine:
-    instrument: Instrument = field(default=Instrument("BTC-USD"))
     clock: Clock = field(default_factory=SystemClock)
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
     seq: int = field(default=0)
-    book: OrderBook = field(init=False)
-
-    def __post_init__(self) -> None:
-        self.book = OrderBook(self.instrument)
+    book: OrderBook = field(default_factory=OrderBook)
 
     def _next_meta(self) -> tuple[int, int]:
         self.seq += 1
@@ -114,13 +110,14 @@ class Engine:
             return [
                 self._reject(command.instrument, command.order_id, "unknown order_id")
             ]
-        if record.status != record.status.ACTIVE:
+        if record.status != OrderStatus.ACTIVE:
             return [
                 self._reject(
                     command.instrument, command.order_id, "order not cancelable"
                 )
             ]
 
+        # TODO: handle errors on cancel to return reject event
         self.book.cancel(command.order_id)
         seq, ts = self._next_meta()
         return [
