@@ -179,7 +179,11 @@ class OrderBook:
             return [], taker_qty_lots
         fills = []
         # TODO: match next best opposite price level if current is fully matched
-        while taker_qty_lots > 0 and maker_order is not None and maker_order.remaining.lots > 0:
+        while (
+            taker_qty_lots > 0
+            and maker_order is not None
+            and maker_order.remaining.lots > 0
+        ):
             maker_order = maker_level.pop_oldest()
             fill_qty_lots = min(taker_qty_lots, maker_order.remaining.lots)
             fills.append(
