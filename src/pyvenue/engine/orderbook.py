@@ -92,7 +92,9 @@ class OrderBook:
         else:
             raise ValueError(f"Invalid side: {order.side}")
         self.orders_by_id[order.order_id] = (order.side, price)
-        fills, _ = self._match(order.side, price, order.remaining.lots)
+        fills, remaining = self._match(order.side, price, order.remaining.lots)
+        if remaining > 0:
+            order.remaining = Qty(remaining)
         return fills
 
     def cancel(self, order_id: OrderId) -> None:
@@ -162,40 +164,58 @@ class OrderBook:
         self, taker_side: Side, taker_price_ticks: int, taker_qty_lots: int
     ) -> tuple[list[Fill], int]:
         if taker_side == Side.BUY:
-            best_opp_price_ticks = self.best_ask()
             maker_side = Side.SELL
+            get_best_opp = self.best_ask
         elif taker_side == Side.SELL:
-            best_opp_price_ticks = self.best_bid()
             maker_side = Side.BUY
+            get_best_opp = self.best_bid
         else:
             raise ValueError(f"Invalid side: {taker_side}")
-        if best_opp_price_ticks is None:
-            return [], taker_qty_lots
-        if not self._crosses(taker_side, taker_price_ticks, best_opp_price_ticks):
-            return [], taker_qty_lots
-        maker_level = self._ensure_level(maker_side, best_opp_price_ticks)
-        maker_order = maker_level.peek_oldest()
-        if maker_order is None:
-            return [], taker_qty_lots
+
         fills = []
-        # TODO: match next best opposite price level if current is fully matched
-        while (
-            taker_qty_lots > 0
-            and maker_order is not None
-            and maker_order.remaining.lots > 0
-        ):
-            maker_order = maker_level.pop_oldest()
-            fill_qty_lots = min(taker_qty_lots, maker_order.remaining.lots)
-            fills.append(
-                Fill(
-                    maker_order_id=maker_order.order_id,
-                    maker_price=Price(best_opp_price_ticks),
-                    qty=Qty(fill_qty_lots),
+        
+        while taker_qty_lots > 0:
+            best_opp_price_ticks = get_best_opp()
+            if best_opp_price_ticks is None:
+                break
+            
+            if not self._crosses(taker_side, taker_price_ticks, best_opp_price_ticks):
+                break
+                
+            maker_level = self._ensure_level(maker_side, best_opp_price_ticks)
+            # Match against this level until empty or taker filled
+            
+            maker_order = maker_level.peek_oldest()
+            while (
+                taker_qty_lots > 0
+                and maker_order is not None
+            ):
+                if maker_order.remaining.lots <= 0:
+                     # Should not happen if logic is correct, but for safety
+                     maker_order = maker_level.pop_oldest()
+                     maker_order = maker_level.peek_oldest()
+                     continue
+
+                fill_qty_lots = min(taker_qty_lots, maker_order.remaining.lots)
+                fills.append(
+                    Fill(
+                        maker_order_id=maker_order.order_id,
+                        maker_price=Price(best_opp_price_ticks),
+                        qty=Qty(fill_qty_lots),
+                    )
                 )
-            )
-            taker_qty_lots -= fill_qty_lots
-            maker_order.remaining = Qty(maker_order.remaining.lots - fill_qty_lots)
-            if maker_order.remaining.lots == 0:
-                self._remove_level_if_empty(maker_side, best_opp_price_ticks)
-                maker_order = maker_level.peek_oldest()
+                taker_qty_lots -= fill_qty_lots
+                maker_order.remaining = Qty(maker_order.remaining.lots - fill_qty_lots)
+                
+                if maker_order.remaining.lots == 0:
+                    maker_level.pop_oldest()
+                    # We modified the book, so we need to peek again
+                    maker_order = maker_level.peek_oldest()
+                else:
+                    # Taker fully filled, maker has remaining
+                    pass
+            
+            # If level is empty, remove it
+            self._remove_level_if_empty(maker_side, best_opp_price_ticks)
+            
         return fills, taker_qty_lots
