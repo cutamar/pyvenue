@@ -173,28 +173,25 @@ class OrderBook:
             raise ValueError(f"Invalid side: {taker_side}")
 
         fills = []
-        
+
         while taker_qty_lots > 0:
             best_opp_price_ticks = get_best_opp()
             if best_opp_price_ticks is None:
                 break
-            
+
             if not self._crosses(taker_side, taker_price_ticks, best_opp_price_ticks):
                 break
-                
+
             maker_level = self._ensure_level(maker_side, best_opp_price_ticks)
             # Match against this level until empty or taker filled
-            
+
             maker_order = maker_level.peek_oldest()
-            while (
-                taker_qty_lots > 0
-                and maker_order is not None
-            ):
+            while taker_qty_lots > 0 and maker_order is not None:
                 if maker_order.remaining.lots <= 0:
-                     # Should not happen if logic is correct, but for safety
-                     maker_order = maker_level.pop_oldest()
-                     maker_order = maker_level.peek_oldest()
-                     continue
+                    # Should not happen if logic is correct, but for safety
+                    maker_order = maker_level.pop_oldest()
+                    maker_order = maker_level.peek_oldest()
+                    continue
 
                 fill_qty_lots = min(taker_qty_lots, maker_order.remaining.lots)
                 fills.append(
@@ -206,7 +203,7 @@ class OrderBook:
                 )
                 taker_qty_lots -= fill_qty_lots
                 maker_order.remaining = Qty(maker_order.remaining.lots - fill_qty_lots)
-                
+
                 if maker_order.remaining.lots == 0:
                     maker_level.pop_oldest()
                     # We modified the book, so we need to peek again
@@ -214,8 +211,8 @@ class OrderBook:
                 else:
                     # Taker fully filled, maker has remaining
                     pass
-            
+
             # If level is empty, remove it
             self._remove_level_if_empty(maker_side, best_opp_price_ticks)
-            
+
         return fills, taker_qty_lots
