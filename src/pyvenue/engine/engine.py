@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import singledispatchmethod
 
+import structlog
+
 from pyvenue.domain.commands import Cancel, Command, PlaceLimit
 from pyvenue.domain.events import (
     Event,
@@ -16,6 +18,7 @@ from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import Clock, EventLog, SystemClock
 
+logger = structlog.get_logger()
 
 @dataclass(slots=True)
 class Engine:
@@ -24,6 +27,9 @@ class Engine:
     log: EventLog = field(default_factory=EventLog)
     seq: int = field(default=0)
     book: OrderBook = field(default_factory=OrderBook)
+
+    def __post_init__(self) -> None:
+        logger.info("Engine initialized", clock=self.clock, start_seq=self.seq)
 
     def _next_meta(self) -> tuple[int, int]:
         self.seq += 1
@@ -42,6 +48,7 @@ class Engine:
         )
 
     def submit(self, command: Command) -> list[Event]:
+        logger.info("submit_order", command=command)
         events = self.handle(command)
         for e in events:
             self.log.append(e)
