@@ -11,8 +11,16 @@ def configure_structlog() -> None:
     level_name = {"WARN": "WARNING", "FATAL": "CRITICAL"}.get(level_name, level_name)
     level = getattr(logging, level_name, logging.INFO)
 
-    json_logs = os.getenv("PYVENUE_LOG_JSON", "0").strip().lower() in {"1", "true", "yes"}
-    renderer = structlog.processors.JSONRenderer() if json_logs else structlog.dev.ConsoleRenderer()
+    json_logs = os.getenv("PYVENUE_LOG_JSON", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    renderer = (
+        structlog.processors.JSONRenderer()
+        if json_logs
+        else structlog.dev.ConsoleRenderer()
+    )
 
     structlog.configure(
         processors=[

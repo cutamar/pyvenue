@@ -20,6 +20,7 @@ from pyvenue.infra import Clock, EventLog, SystemClock
 
 logger = structlog.get_logger()
 
+
 @dataclass(slots=True)
 class Engine:
     clock: Clock = field(default_factory=SystemClock)
