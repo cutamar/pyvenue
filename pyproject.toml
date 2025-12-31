@@ -14,17 +14,12 @@ dependencies = [
     "structlog>=25.5.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-  "black>=24.10.0",
   "pytest>=8.3.0",
   "pyright>=1.1.390",
   "ruff>=0.8.0",
 ]
-
-[tool.black]
-line-length = 88
-target-version = ["py313"]
 
 [tool.ruff]
 target-version = "py313"
@@ -35,7 +30,7 @@ fix = true
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 ignore = [
-  # let black handle line length
+  # formatter handles wrapping; keep line-length checks off
   "E501",
 ]
 

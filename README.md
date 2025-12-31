@@ -12,12 +12,11 @@ A small, educational (but correctness-first) exchange / matching engine project 
 # from repo root
 uv python install 3.13
 uv venv --python 3.13
-uv pip install -e ".[dev]"
+uv sync
 
 # checks
 ruff check .
 ruff format .
-black --check .
 pyright
 pytest -q
 ```
