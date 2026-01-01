@@ -18,11 +18,12 @@ from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import Clock, EventLog, SystemClock
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__, component="Engine")
 
 
 @dataclass(slots=True)
 class Engine:
+    instrument: Instrument
     clock: Clock = field(default_factory=SystemClock)
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
@@ -30,7 +31,12 @@ class Engine:
     book: OrderBook = field(default_factory=OrderBook)
 
     def __post_init__(self) -> None:
-        logger.info("Engine initialized", clock=self.clock, start_seq=self.seq)
+        logger.info(
+            "Engine initialized",
+            instrument=self.instrument,
+            clock=self.clock,
+            start_seq=self.seq,
+        )
 
     def _next_meta(self) -> tuple[int, int]:
         self.seq += 1
@@ -49,7 +55,14 @@ class Engine:
         )
 
     def submit(self, command: Command) -> list[Event]:
-        logger.info("Submitting command", command=command)
+        logger.debug("Submitting command", command=command)
+        if command.instrument != self.instrument:
+            logger.warning("Command rejected: instrument mismatch", command=command)
+            return [
+                self._reject(
+                    command.instrument, command.order_id, "instrument mismatch"
+                )
+            ]
         events = self.handle(command)
         for e in events:
             self.log.append(e)
@@ -142,8 +155,14 @@ class Engine:
                 )
             ]
 
-        # TODO: handle errors on cancel to return reject event
-        self.book.cancel(command.order_id)
+        if not self.book.cancel(command.order_id):
+            logger.warning("Cancel command rejected: unknown order_id", command=command)
+            return [
+                self._reject(
+                    command.instrument, command.order_id, "order_id not in book"
+                )
+            ]
+
         seq, ts = self._next_meta()
         logger.debug("Cancel seq and ts", seq=seq, ts=ts)
         return [

@@ -32,8 +32,8 @@ def test_determinism_same_commands_same_events():
         ),
     ]
 
-    e1 = Engine(clock=FixedClock(999))
-    e2 = Engine(clock=FixedClock(999))
+    e1 = Engine(instrument=Instrument("BTC-USD"), clock=FixedClock(999))
+    e2 = Engine(instrument=Instrument("BTC-USD"), clock=FixedClock(999))
 
     out1 = [ev for c in cmds for ev in e1.submit(c)]
     out2 = [ev for c in cmds for ev in e2.submit(c)]
@@ -43,7 +43,7 @@ def test_determinism_same_commands_same_events():
 
 
 def test_replay_events_rebuilds_same_state():
-    engine = Engine(clock=FixedClock(111))
+    engine = Engine(instrument=Instrument("BTC-USD"), clock=FixedClock(111))
     engine.submit(
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
@@ -75,7 +75,7 @@ def test_replay_events_rebuilds_same_state():
 
 
 def test_reject_duplicate_order_id():
-    engine = Engine(clock=FixedClock(1))
+    engine = Engine(instrument=Instrument("BTC-USD"), clock=FixedClock(1))
     engine.submit(
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
@@ -97,3 +97,20 @@ def test_reject_duplicate_order_id():
         )
     )
     assert events[0].type == "OrderRejected"
+
+
+def test_reject_instrument_mismatch():
+    engine = Engine(instrument=Instrument("BTC-USD"), clock=FixedClock(1))
+    events = engine.submit(
+        PlaceLimit(
+            instrument=Instrument("ETH-USD"),
+            order_id=OrderId("o2"),
+            side=Side.BUY,
+            price=Price(100),
+            qty=Qty(1),
+            client_ts_ns=1,
+        )
+    )
+    assert len(events) == 1
+    assert events[0].type == "OrderRejected"
+    assert events[0].reason == "instrument mismatch"

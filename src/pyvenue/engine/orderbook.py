@@ -8,7 +8,7 @@ import structlog
 
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__, component="OrderBook")
 
 
 @dataclass(slots=True)
@@ -121,12 +121,12 @@ class OrderBook:
         self._log_book()
         return fills
 
-    def cancel(self, order_id: OrderId) -> None:
+    def cancel(self, order_id: OrderId) -> bool:
         self._log_book()
         logger.debug("Canceling order in the book", order_id=order_id)
         loc = self.orders_by_id.get(order_id, None)
         if loc is None:
-            raise RuntimeError(f"Order {order_id} not found")
+            return False
         side, price = loc
         if side == Side.BUY:
             price_level = self._ensure_level(Side.BUY, price)
@@ -140,6 +140,7 @@ class OrderBook:
             raise RuntimeError(f"Invalid side: {side}")
         self.orders_by_id.pop(order_id, None)
         self._log_book()
+        return True
 
     def _ensure_level(self, side: Side, price_ticks: int) -> PriceLevel:
         if side == Side.BUY:
