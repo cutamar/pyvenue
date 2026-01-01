@@ -4,7 +4,11 @@ import bisect
 from collections import OrderedDict
 from dataclasses import dataclass
 
+import structlog
+
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+
+logger = structlog.get_logger()
 
 
 @dataclass(slots=True)
@@ -42,9 +46,11 @@ class PriceLevel:
         return bool(self.orders)
 
     def add(self, order: RestingOrder) -> None:
+        logger.debug("Adding order to level", order=order)
         self.orders[order.order_id] = order
 
     def cancel(self, order_id: OrderId) -> None:
+        logger.debug("Canceling order from level", order_id=order_id)
         order = self.orders.pop(order_id, None)
         if order is None:
             raise RuntimeError(
@@ -55,6 +61,11 @@ class PriceLevel:
         return next(iter(self.orders.values()), None)
 
     def pop_oldest(self) -> RestingOrder:
+        logger.debug(
+            "Popping oldest order from level",
+            price=self.price.ticks,
+            order=self.peek_oldest(),
+        )
         _, order = self.orders.popitem(last=False)
         return order
 
@@ -81,7 +92,18 @@ class OrderBook:
     def best_ask(self) -> int | None:
         return self.ask_prices[0] if self.ask_prices else None
 
+    def _log_book(self) -> None:
+        logger.debug(
+            "Order book state",
+            bids=self.bids,
+            asks=self.asks,
+            bid_prices=self.bid_prices,
+            ask_prices=self.ask_prices,
+        )
+
     def place_limit(self, order: RestingOrder) -> list[Fill]:
+        self._log_book()
+        logger.debug("Placing limit order in the book", order=order)
         price = order.price.ticks
         if order.side == Side.BUY:
             price_level = self._ensure_level(Side.BUY, price)
@@ -95,9 +117,13 @@ class OrderBook:
         fills, remaining = self._match(order.side, price, order.remaining.lots)
         if remaining > 0:
             order.remaining = Qty(remaining)
+        logger.debug("Limit order placed in the book", remaining=remaining)
+        self._log_book()
         return fills
 
     def cancel(self, order_id: OrderId) -> None:
+        self._log_book()
+        logger.debug("Canceling order in the book", order_id=order_id)
         loc = self.orders_by_id.get(order_id, None)
         if loc is None:
             raise RuntimeError(f"Order {order_id} not found")
@@ -113,6 +139,7 @@ class OrderBook:
         else:
             raise RuntimeError(f"Invalid side: {side}")
         self.orders_by_id.pop(order_id, None)
+        self._log_book()
 
     def _ensure_level(self, side: Side, price_ticks: int) -> PriceLevel:
         if side == Side.BUY:

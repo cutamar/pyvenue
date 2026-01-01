@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import singledispatchmethod
 
+from structlog import get_logger
+
 from pyvenue.domain.events import (
     Event,
     OrderAccepted,
@@ -12,6 +14,8 @@ from pyvenue.domain.events import (
     TradeOccurred,
 )
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+
+logger = get_logger()
 
 
 class OrderStatus(str, Enum):
@@ -38,6 +42,9 @@ class EngineState:
     def __init__(self) -> None:
         self.orders = {}
 
+    def _log_state(self) -> None:
+        logger.debug("Engine state", orders=self.orders)
+
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
             self.apply(e)
@@ -48,6 +55,7 @@ class EngineState:
 
     @apply.register
     def _(self, event: OrderAccepted) -> None:
+        logger.debug("Applying order accepted event", trade_event=event)
         self.orders[event.order_id] = OrderRecord(
             instrument=event.instrument,
             order_id=event.order_id,
@@ -57,15 +65,19 @@ class EngineState:
             remaining=event.qty,
             status=OrderStatus.ACTIVE,
         )
+        self._log_state()
 
     @apply.register
     def _(self, event: OrderCanceled) -> None:
+        logger.debug("Applying order canceled event", trade_event=event)
         record = self.orders.get(event.order_id)
         if record is not None:
             record.status = OrderStatus.CANCELED
+        self._log_state()
 
     @apply.register
     def _(self, event: TradeOccurred) -> None:
+        logger.debug("Applying trade occurred event", trade_event=event)
         for order_id in (event.taker_order_id, event.maker_order_id):
             record = self.orders.get(order_id)
             if record is None:
@@ -74,8 +86,9 @@ class EngineState:
             record.remaining = Qty(max(0, new_remaining))
             if record.remaining.lots == 0 and record.status == OrderStatus.ACTIVE:
                 record.status = OrderStatus.FILLED
+        self._log_state()
 
     @apply.register
     def _(self, event: OrderRejected) -> None:
         # nothing to do in this case
-        pass
+        logger.debug("Applying order rejected event", trade_event=event)

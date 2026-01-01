@@ -49,7 +49,7 @@ class Engine:
         )
 
     def submit(self, command: Command) -> list[Event]:
-        logger.info("submit_order", command=command)
+        logger.info("Submitting command", command=command)
         events = self.handle(command)
         for e in events:
             self.log.append(e)
@@ -58,24 +58,36 @@ class Engine:
 
     @singledispatchmethod
     def handle(self, command: Command) -> list[Event]:
+        logger.warning("Unsupported command", command=command)
         raise TypeError(f"Unsupported command {type(command)!r}")
 
     @handle.register
     def _(self, command: PlaceLimit) -> list[Event]:
+        logger.debug("Handling PlaceLimit command", command=command)
         if command.qty.lots <= 0:
+            logger.warning(
+                "PlaceLimit command rejected: qty must be > 0", command=command
+            )
             return [
                 self._reject(command.instrument, command.order_id, "qty must be > 0")
             ]
         if command.price.ticks <= 0:
+            logger.warning(
+                "PlaceLimit command rejected: price must be > 0", command=command
+            )
             return [
                 self._reject(command.instrument, command.order_id, "price must be > 0")
             ]
         if command.order_id in self.state.orders:
+            logger.warning(
+                "PlaceLimit command rejected: duplicate order_id", command=command
+            )
             return [
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
 
         seq, ts = self._next_meta()
+        logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
         events: list[Event] = [
             OrderAccepted(
                 seq=seq,
@@ -113,12 +125,17 @@ class Engine:
 
     @handle.register
     def _(self, command: Cancel) -> list[Event]:
+        logger.debug("Handling Cancel command", command=command)
         record = self.state.orders.get(command.order_id)
         if record is None:
+            logger.warning("Cancel command rejected: unknown order_id", command=command)
             return [
                 self._reject(command.instrument, command.order_id, "unknown order_id")
             ]
         if record.status != OrderStatus.ACTIVE:
+            logger.warning(
+                "Cancel command rejected: order not cancelable", command=command
+            )
             return [
                 self._reject(
                     command.instrument, command.order_id, "order not cancelable"
@@ -128,6 +145,7 @@ class Engine:
         # TODO: handle errors on cancel to return reject event
         self.book.cancel(command.order_id)
         seq, ts = self._next_meta()
+        logger.debug("Cancel seq and ts", seq=seq, ts=ts)
         return [
             OrderCanceled(
                 seq=seq,
