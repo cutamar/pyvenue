@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import bisect
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import structlog
 
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
-logger = structlog.get_logger(__name__, component="OrderBook")
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -33,11 +33,14 @@ class PriceLevel:
     Adding a duplicate order_id will overwrite the existing order."""
 
     price: Price
-    orders: OrderedDict[OrderId, RestingOrder]
+    orders: OrderedDict[OrderId, RestingOrder] = field(default_factory=OrderedDict)
+    logger: structlog.BoundLogger = field(init=False)
 
-    def __init__(self, price: Price) -> None:
-        self.price = price
-        self.orders = OrderedDict()
+    def __post_init__(self) -> None:
+        self.logger = logger.bind(
+            _component=self.__class__.__name__,
+            price=self.price.ticks,
+        )
 
     def __len__(self) -> int:
         return len(self.orders)
@@ -46,24 +49,20 @@ class PriceLevel:
         return bool(self.orders)
 
     def add(self, order: RestingOrder) -> None:
-        logger.debug("Adding order to level", order=order)
+        self.logger.debug("Adding order to level", order=order)
         self.orders[order.order_id] = order
 
-    def cancel(self, order_id: OrderId) -> None:
-        logger.debug("Canceling order from level", order_id=order_id)
+    def cancel(self, order_id: OrderId) -> bool:
+        self.logger.debug("Canceling order from level", order_id=order_id)
         order = self.orders.pop(order_id, None)
-        if order is None:
-            raise RuntimeError(
-                f"Order {order_id} not found in expected level {self.price.ticks}"
-            )
+        return order is not None
 
     def peek_oldest(self) -> RestingOrder | None:
         return next(iter(self.orders.values()), None)
 
     def pop_oldest(self) -> RestingOrder:
-        logger.debug(
+        self.logger.debug(
             "Popping oldest order from level",
-            price=self.price.ticks,
             order=self.peek_oldest(),
         )
         _, order = self.orders.popitem(last=False)
@@ -78,13 +77,12 @@ class OrderBook:
     bid_prices: list[int]
     ask_prices: list[int]
     orders_by_id: dict[OrderId, tuple[Side, int]]
+    logger: structlog.BoundLogger = field(init=False)
 
-    def __init__(self) -> None:
-        self.bids = {}
-        self.asks = {}
-        self.bid_prices = []
-        self.ask_prices = []
-        self.orders_by_id = {}
+    def __post_init__(self) -> None:
+        self.logger = logger.bind(
+            _component=self.__class__.__name__,
+        )
 
     def best_bid(self) -> int | None:
         return self.bid_prices[-1] if self.bid_prices else None
@@ -93,7 +91,7 @@ class OrderBook:
         return self.ask_prices[0] if self.ask_prices else None
 
     def _log_book(self) -> None:
-        logger.debug(
+        self.logger.debug(
             "Order book state",
             bids=self.bids,
             asks=self.asks,
@@ -103,7 +101,7 @@ class OrderBook:
 
     def place_limit(self, order: RestingOrder) -> list[Fill]:
         self._log_book()
-        logger.debug("Placing limit order in the book", order=order)
+        self.logger.debug("Placing limit order in the book", order=order)
         price = order.price.ticks
         if order.side == Side.BUY:
             price_level = self._ensure_level(Side.BUY, price)
@@ -117,13 +115,13 @@ class OrderBook:
         fills, remaining = self._match(order.side, price, order.remaining.lots)
         if remaining > 0:
             order.remaining = Qty(remaining)
-        logger.debug("Limit order placed in the book", remaining=remaining)
+        self.logger.debug("Limit order placed in the book", remaining=remaining)
         self._log_book()
         return fills
 
     def cancel(self, order_id: OrderId) -> bool:
         self._log_book()
-        logger.debug("Canceling order in the book", order_id=order_id)
+        self.logger.debug("Canceling order in the book", order_id=order_id)
         loc = self.orders_by_id.get(order_id, None)
         if loc is None:
             return False
