@@ -69,14 +69,15 @@ class PriceLevel:
         return order
 
 
+@dataclass(slots=True)
 class OrderBook:
     """An order book for a single instrument."""
 
-    bids: dict[int, PriceLevel]
-    asks: dict[int, PriceLevel]
-    bid_prices: list[int]
-    ask_prices: list[int]
-    orders_by_id: dict[OrderId, tuple[Side, int]]
+    bids: dict[int, PriceLevel] = field(default_factory=dict)
+    asks: dict[int, PriceLevel] = field(default_factory=dict)
+    bid_prices: list[int] = field(default_factory=list)
+    ask_prices: list[int] = field(default_factory=list)
+    orders_by_id: dict[OrderId, tuple[Side, int]] = field(default_factory=dict)
     logger: structlog.BoundLogger = field(init=False)
 
     def __post_init__(self) -> None:
