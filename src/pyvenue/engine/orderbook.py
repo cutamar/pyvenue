@@ -94,10 +94,13 @@ class OrderBook:
     def _log_book(self) -> None:
         self.logger.debug(
             "Order book state",
-            bids=self.bids,
-            asks=self.asks,
-            bid_prices=self.bid_prices,
-            ask_prices=self.ask_prices,
+            num_bids=len(self.bids),
+            num_asks=len(self.asks),
+            num_orders=len(self.orders_by_id),
+            num_bid_levels=len(self.bid_prices),
+            num_ask_levels=len(self.ask_prices),
+            best_bid=self.best_bid(),
+            best_ask=self.best_ask(),
         )
 
     def place_limit(self, order: RestingOrder) -> list[Fill]:
