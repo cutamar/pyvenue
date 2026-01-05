@@ -28,10 +28,11 @@ class Engine:
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
     seq: int = field(default=0)
-    book: OrderBook = field(default_factory=OrderBook)
+    book: OrderBook = field(init=False)
     logger: structlog.BoundLogger = field(init=False)
 
     def __post_init__(self) -> None:
+        self.book = OrderBook(self.instrument)
         self.logger = logger.bind(
             _component=self.__class__.__name__,
             instrument=self.instrument,

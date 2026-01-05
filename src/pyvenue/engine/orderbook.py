@@ -73,6 +73,7 @@ class PriceLevel:
 class OrderBook:
     """An order book for a single instrument."""
 
+    instrument: Instrument
     bids: dict[int, PriceLevel] = field(default_factory=dict)
     asks: dict[int, PriceLevel] = field(default_factory=dict)
     bid_prices: list[int] = field(default_factory=list)
