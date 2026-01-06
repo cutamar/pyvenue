@@ -136,12 +136,18 @@ class OrderBook:
             return False
         side, price = loc
         if side == Side.BUY:
-            price_level = self._ensure_level(Side.BUY, price)
-            price_level.cancel(order_id)
+            price_level = self.bids.get(price, None)
+            if price_level is None:
+                return False
+            if not price_level.cancel(order_id):
+                return False
             self._remove_level_if_empty(Side.BUY, price)
         elif side == Side.SELL:
-            price_level = self._ensure_level(Side.SELL, price)
-            price_level.cancel(order_id)
+            price_level = self.asks.get(price, None)
+            if price_level is None:
+                return False
+            if not price_level.cancel(order_id):
+                return False
             self._remove_level_if_empty(Side.SELL, price)
         else:
             raise RuntimeError(f"Invalid side: {side}")

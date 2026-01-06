@@ -78,8 +78,7 @@ def test_cancel_must_not_create_missing_levels_when_out_of_sync() -> None:
     # order appears in orders_by_id, but its level doesn't exist.
     book.orders_by_id[OrderId("ghost")] = (Side.BUY, 123)
 
-    with pytest.raises(RuntimeError):
-        book.cancel(OrderId("ghost"))
+    assert book.cancel(OrderId("ghost")) is False
 
     # Must not have created a new level as a side effect
     assert 123 not in book.bids
