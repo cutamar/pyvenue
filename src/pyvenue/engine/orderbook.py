@@ -108,18 +108,22 @@ class OrderBook:
         self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
         price = order.price.ticks
-        if order.side == Side.BUY:
-            price_level = self._ensure_level(Side.BUY, price)
-            price_level.add(order)
-        elif order.side == Side.SELL:
-            price_level = self._ensure_level(Side.SELL, price)
-            price_level.add(order)
-        else:
-            raise ValueError(f"Invalid side: {order.side}")
-        self.orders_by_id[order.order_id] = (order.side, price)
         fills, remaining = self._match(order.side, price, order.remaining.lots)
         if remaining > 0:
+            # place remaining order
+            self.logger.debug(
+                "Placing remaining order in the book", remaining=remaining
+            )
             order.remaining = Qty(remaining)
+            self.orders_by_id[order.order_id] = (order.side, price)
+            if order.side == Side.BUY:
+                price_level = self._ensure_level(Side.BUY, price)
+                price_level.add(order)
+            elif order.side == Side.SELL:
+                price_level = self._ensure_level(Side.SELL, price)
+                price_level.add(order)
+            else:
+                raise ValueError(f"Invalid side: {order.side}")
         self.logger.debug("Limit order placed in the book", remaining=remaining)
         self._log_book()
         return fills
@@ -236,7 +240,8 @@ class OrderBook:
                 maker_order.remaining = Qty(maker_order.remaining.lots - fill_qty_lots)
 
                 if maker_order.remaining.lots == 0:
-                    maker_level.pop_oldest()
+                    maker_order = maker_level.pop_oldest()
+                    self.orders_by_id.pop(maker_order.order_id, None)
                     # We modified the book, so we need to peek again
                     maker_order = maker_level.peek_oldest()
                 else:
