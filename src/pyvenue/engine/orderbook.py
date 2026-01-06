@@ -107,6 +107,8 @@ class OrderBook:
     def place_limit(self, order: RestingOrder) -> list[Fill]:
         self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
+        if order.instrument != self.instrument:
+            raise ValueError("Order instrument does not match book instrument")
         price = order.price.ticks
         fills, remaining = self._match(order.side, price, order.remaining.lots)
         if remaining > 0:
