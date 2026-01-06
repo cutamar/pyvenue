@@ -14,10 +14,15 @@ uv python install 3.13
 uv venv --python 3.13
 uv sync
 
-# checks
+# automatic checks on commit
+pre-commit install
+
+# manual checks
 ruff check .
 ruff format .
 pyright
+
+# tests
 pytest -q
 ```
 
