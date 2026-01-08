@@ -171,6 +171,14 @@ class OrderBook:
         else:
             raise ValueError(f"Invalid side: {side}")
 
+    def _get_level(self, side: Side, price_ticks: int) -> PriceLevel | None:
+        if side == Side.BUY:
+            return self.bids.get(price_ticks, None)
+        elif side == Side.SELL:
+            return self.asks.get(price_ticks, None)
+        else:
+            raise ValueError(f"Invalid side: {side}")
+
     def _remove_level_if_empty(self, side: Side, price_ticks: int) -> None:
         if side == Side.BUY:
             if price_ticks in self.bids and not self.bids[price_ticks]:
@@ -225,14 +233,17 @@ class OrderBook:
             if not self._crosses(taker_side, taker_price_ticks, best_opp_price_ticks):
                 break
 
-            maker_level = self._ensure_level(maker_side, best_opp_price_ticks)
+            maker_level = self._get_level(maker_side, best_opp_price_ticks)
+            if maker_level is None:
+                raise RuntimeError(f"No level found for price: {best_opp_price_ticks}")
+
             # Match against this level until empty or taker filled
 
             maker_order = maker_level.peek_oldest()
             while taker_qty_lots > 0 and maker_order is not None:
                 if maker_order.remaining.lots <= 0:
                     # Should not happen if logic is correct, but for safety
-                    maker_order = maker_level.pop_oldest()
+                    maker_level.pop_oldest()
                     maker_order = maker_level.peek_oldest()
                     continue
 
