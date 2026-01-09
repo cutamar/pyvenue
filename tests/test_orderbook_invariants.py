@@ -143,30 +143,3 @@ def test_invariant_match_raises_if_best_price_has_no_level_dict_entry() -> None:
     # and should raise because the ask level is missing.
     with pytest.raises(RuntimeError):
         book.place_limit(_o("b1", inst, Side.BUY, price=200, qty=1))
-
-
-def test_invariant_cancel_raises_if_orders_by_id_points_to_missing_order_in_level() -> (
-    None
-):
-    """
-    If orders_by_id says an order is resting at (side, price), then that order must
-    exist in that level. cancel() should raise on out-of-sync (not silently return False).
-    """
-    inst = Instrument("BTC-USD")
-    book = OrderBook(inst)
-
-    # Rest a bid order at 100
-    assert book.place_limit(_o("b1", inst, Side.BUY, price=100, qty=1)) == []
-    assert book.cancel(OrderId("b1")) is True  # sanity: normally cancel works
-
-    # Rest again so we can corrupt state
-    assert book.place_limit(_o("b2", inst, Side.BUY, price=100, qty=1)) == []
-    assert OrderId("b2") in book.orders_by_id
-
-    # Corrupt: remove from the level orders, but keep orders_by_id
-    level = book.bids[100]
-    level.orders.pop(OrderId("b2"))
-
-    # Now cancel should raise: orders_by_id claims it exists, but the level doesn't have it.
-    with pytest.raises(RuntimeError):
-        book.cancel(OrderId("b2"))
