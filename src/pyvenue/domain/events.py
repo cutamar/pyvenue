@@ -49,4 +49,14 @@ class TradeOccurred:
     qty: Qty
 
 
-Event = OrderAccepted | OrderRejected | OrderCanceled | TradeOccurred
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TopOfBookChanged:
+    type: Literal["TopOfBookChanged"] = field(default="TopOfBookChanged", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    best_bid_ticks: Price | None
+    best_ask_ticks: Price | None
+
+
+Event = OrderAccepted | OrderRejected | OrderCanceled | TradeOccurred | TopOfBookChanged

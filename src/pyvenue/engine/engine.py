@@ -76,6 +76,13 @@ class Engine:
             self.state.apply(e)
         return events
 
+    @classmethod
+    def replay(cls, instrument: Instrument, events: list[Event]) -> Engine:
+        engine = cls(instrument=instrument)
+        for e in events:
+            engine.state.apply(e)
+        return engine
+
     @singledispatchmethod
     def handle(self, command: Command) -> list[Event]:
         self.logger.warning("Unsupported command", command=command)
