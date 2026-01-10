@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
-from pyvenue.domain.events import TopOfBookChanged
+from pyvenue.domain.events import Event, TopOfBookChanged
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 
@@ -28,7 +28,7 @@ def _cx(inst: Instrument, oid: str, client_ts_ns: int) -> Cancel:
     return Cancel(instrument=inst, order_id=OrderId(oid), client_ts_ns=client_ts_ns)
 
 
-def _bbo(events: list[object]) -> list[TopOfBookChanged]:
+def _bbo(events: list[Event]) -> list[TopOfBookChanged]:
     return [e for e in events if isinstance(e, TopOfBookChanged)]
 
 

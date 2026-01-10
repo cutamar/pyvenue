@@ -3,7 +3,7 @@ from __future__ import annotations
 from pyvenue.domain.commands import PlaceLimit
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
-from pyvenue.engine.state import OrderStatus
+from pyvenue.engine.state import OrderRecord, OrderStatus
 
 
 def _pl(
@@ -19,7 +19,7 @@ def _pl(
     )
 
 
-def _remaining_lots(record: object) -> int:
+def _remaining_lots(record: OrderRecord) -> int:
     """
     Adjust this helper if your OrderRecord uses a different field name.
     Expected: record.remaining is a Qty.
