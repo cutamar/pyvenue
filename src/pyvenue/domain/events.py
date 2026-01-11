@@ -55,8 +55,8 @@ class TopOfBookChanged:
     seq: int
     ts_ns: int
     instrument: Instrument
-    best_bid_ticks: Price | None
-    best_ask_ticks: Price | None
+    best_bid_ticks: int | None
+    best_ask_ticks: int | None
 
 
 Event = OrderAccepted | OrderRejected | OrderCanceled | TradeOccurred | TopOfBookChanged

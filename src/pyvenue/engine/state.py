@@ -11,6 +11,7 @@ from pyvenue.domain.events import (
     OrderAccepted,
     OrderCanceled,
     OrderRejected,
+    TopOfBookChanged,
     TradeOccurred,
 )
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
@@ -92,3 +93,7 @@ class EngineState:
     def _(self, event: OrderRejected) -> None:
         # nothing to do in this case
         logger.debug("Applying order rejected event", trade_event=event)
+
+    @apply.register
+    def _(self, event: TopOfBookChanged) -> None:
+        logger.debug("Applying top of book changed event", trade_event=event)

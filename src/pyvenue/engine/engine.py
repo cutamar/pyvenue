@@ -11,6 +11,7 @@ from pyvenue.domain.events import (
     OrderAccepted,
     OrderCanceled,
     OrderRejected,
+    TopOfBookChanged,
     TradeOccurred,
 )
 from pyvenue.domain.types import Instrument, OrderId
@@ -70,7 +71,19 @@ class Engine:
                     command.instrument, command.order_id, "instrument mismatch"
                 )
             ]
+        top_of_book = self.book.top_of_book()
         events = self.handle(command)
+        if top_of_book != self.book.top_of_book():
+            seq, ts = self._next_meta()
+            events.append(
+                TopOfBookChanged(
+                    seq=seq,
+                    ts_ns=ts,
+                    instrument=self.instrument,
+                    best_bid_ticks=self.book.best_bid(),
+                    best_ask_ticks=self.book.best_ask(),
+                )
+            )
         for e in events:
             self.log.append(e)
             self.state.apply(e)

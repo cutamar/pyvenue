@@ -92,6 +92,9 @@ class OrderBook:
     def best_ask(self) -> int | None:
         return self.ask_prices[0] if self.ask_prices else None
 
+    def top_of_book(self) -> tuple[int | None, int | None]:
+        return self.best_bid(), self.best_ask()
+
     def _log_book(self) -> None:
         self.logger.debug(
             "Order book state",
