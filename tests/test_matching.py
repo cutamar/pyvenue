@@ -79,11 +79,6 @@ def cancel(engine: Engine, *, oid: str, client_ts_ns: int) -> list[Event]:
     )
 
 
-# ----------------------------
-# Milestone 2 tests
-# ----------------------------
-
-
 def test_single_match_full_fill_trade_at_maker_price():
     """
     Resting ask: a1 5 @ 100
@@ -93,10 +88,10 @@ def test_single_match_full_fill_trade_at_maker_price():
     e = Engine(instrument=INSTR, clock=FixedClock(1))
 
     ev1 = place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
-    assert types(ev1) == ["OrderAccepted"]
+    assert types(ev1) == ["OrderAccepted", "TopOfBookChanged"]
 
     ev2 = place(e, oid="b1", side=Side.BUY, price=110, qty=5, client_ts_ns=2)
-    assert types(ev2) == ["OrderAccepted", "TradeOccurred"]
+    assert types(ev2) == ["OrderAccepted", "TradeOccurred", "TopOfBookChanged"]
     assert_trade(ev2[1], taker="b1", maker="a1", price_ticks=100, qty_lots=5)
 
 
@@ -115,7 +110,7 @@ def test_partial_fill_resting_order_keeps_remaining():
     assert_trade(ev_b1[1], taker="b1", maker="a1", price_ticks=100, qty_lots=4)
 
     ev_b2 = place(e, oid="b2", side=Side.BUY, price=100, qty=6, client_ts_ns=3)
-    assert types(ev_b2) == ["OrderAccepted", "TradeOccurred"]
+    assert types(ev_b2) == ["OrderAccepted", "TradeOccurred", "TopOfBookChanged"]
     assert_trade(ev_b2[1], taker="b2", maker="a1", price_ticks=100, qty_lots=6)
 
 
@@ -147,6 +142,7 @@ def test_sweep_multiple_price_levels_and_leave_remainder():
         "TradeOccurred",
         "TradeOccurred",
         "TradeOccurred",
+        "TopOfBookChanged",
     ]
 
     assert_trade(ev_b1[1], taker="b1", maker="a1", price_ticks=100, qty_lots=3)
@@ -154,7 +150,7 @@ def test_sweep_multiple_price_levels_and_leave_remainder():
     assert_trade(ev_b1[3], taker="b1", maker="a3", price_ticks=102, qty_lots=3)
 
     ev_b2 = place(e, oid="b2", side=Side.BUY, price=999, qty=2, client_ts_ns=5)
-    assert types(ev_b2) == ["OrderAccepted", "TradeOccurred"]
+    assert types(ev_b2) == ["OrderAccepted", "TradeOccurred", "TopOfBookChanged"]
     assert_trade(ev_b2[1], taker="b2", maker="a3", price_ticks=102, qty_lots=2)
 
 
@@ -197,11 +193,11 @@ def test_no_cross_order_rests_and_can_trade_later():
     place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
 
     ev_b1 = place(e, oid="b1", side=Side.BUY, price=99, qty=1, client_ts_ns=2)
-    assert types(ev_b1) == ["OrderAccepted"]
+    assert types(ev_b1) == ["OrderAccepted", "TopOfBookChanged"]
     assert trades(ev_b1) == []
 
     ev_s1 = place(e, oid="s1", side=Side.SELL, price=99, qty=1, client_ts_ns=3)
-    assert types(ev_s1) == ["OrderAccepted", "TradeOccurred"]
+    assert types(ev_s1) == ["OrderAccepted", "TradeOccurred", "TopOfBookChanged"]
     assert_trade(ev_s1[1], taker="s1", maker="b1", price_ticks=99, qty_lots=1)
 
 
@@ -218,7 +214,7 @@ def test_cancel_prevents_fill():
     place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
 
     ev_c = cancel(e, oid="a1", client_ts_ns=2)
-    assert types(ev_c) == ["OrderCanceled"]
+    assert types(ev_c) == ["OrderCanceled", "TopOfBookChanged"]
 
     ev_b1 = place(e, oid="b1", side=Side.BUY, price=100, qty=5, client_ts_ns=3)
     assert types(ev_b1)[0] == "OrderAccepted"
