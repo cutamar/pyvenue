@@ -66,24 +66,25 @@ class Engine:
             self.logger.warning(
                 "Command rejected: instrument mismatch", command=command
             )
-            return [
+            events: list[Event] = [
                 self._reject(
                     command.instrument, command.order_id, "instrument mismatch"
                 )
             ]
-        top_of_book = self.book.top_of_book()
-        events = self.handle(command)
-        if top_of_book != self.book.top_of_book():
-            seq, ts = self._next_meta()
-            events.append(
-                TopOfBookChanged(
-                    seq=seq,
-                    ts_ns=ts,
-                    instrument=self.instrument,
-                    best_bid_ticks=self.book.best_bid(),
-                    best_ask_ticks=self.book.best_ask(),
+        else:
+            top_of_book = self.book.top_of_book()
+            events = self.handle(command)
+            if top_of_book != self.book.top_of_book():
+                seq, ts = self._next_meta()
+                events.append(
+                    TopOfBookChanged(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=self.instrument,
+                        best_bid_ticks=self.book.best_bid(),
+                        best_ask_ticks=self.book.best_ask(),
+                    )
                 )
-            )
         for e in events:
             self.log.append(e)
             self.state.apply(e)
@@ -92,7 +93,9 @@ class Engine:
     @classmethod
     def replay(cls, instrument: Instrument, events: list[Event]) -> Engine:
         engine = cls(instrument=instrument)
+        # TODO: full replay (book, seq, clock)
         for e in events:
+            engine.log.append(e)
             engine.state.apply(e)
         return engine
 
@@ -108,59 +111,59 @@ class Engine:
             self.logger.warning(
                 "PlaceLimit command rejected: qty must be > 0", command=command
             )
-            return [
+            events = [
                 self._reject(command.instrument, command.order_id, "qty must be > 0")
             ]
-        if command.price.ticks <= 0:
+        elif command.price.ticks <= 0:
             self.logger.warning(
                 "PlaceLimit command rejected: price must be > 0", command=command
             )
-            return [
+            events = [
                 self._reject(command.instrument, command.order_id, "price must be > 0")
             ]
-        if command.order_id in self.state.orders:
+        elif command.order_id in self.state.orders:
             self.logger.warning(
                 "PlaceLimit command rejected: duplicate order_id", command=command
             )
-            return [
+            events = [
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
-
-        seq, ts = self._next_meta()
-        self.logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
-        events: list[Event] = [
-            OrderAccepted(
-                seq=seq,
-                ts_ns=ts,
-                instrument=command.instrument,
-                order_id=command.order_id,
-                side=command.side,
-                price=command.price,
-                qty=command.qty,
-            )
-        ]
-        fill_events = self.book.place_limit(
-            RestingOrder(
-                order_id=command.order_id,
-                instrument=command.instrument,
-                side=command.side,
-                price=command.price,
-                remaining=command.qty,
-            )
-        )
-        for fill_event in fill_events:
+        else:
             seq, ts = self._next_meta()
-            events.append(
-                TradeOccurred(
+            self.logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
+            events: list[Event] = [
+                OrderAccepted(
                     seq=seq,
                     ts_ns=ts,
                     instrument=command.instrument,
-                    taker_order_id=command.order_id,
-                    maker_order_id=fill_event.maker_order_id,
-                    qty=fill_event.qty,
-                    price=fill_event.maker_price,
+                    order_id=command.order_id,
+                    side=command.side,
+                    price=command.price,
+                    qty=command.qty,
+                )
+            ]
+            fill_events = self.book.place_limit(
+                RestingOrder(
+                    order_id=command.order_id,
+                    instrument=command.instrument,
+                    side=command.side,
+                    price=command.price,
+                    remaining=command.qty,
                 )
             )
+            for fill_event in fill_events:
+                seq, ts = self._next_meta()
+                events.append(
+                    TradeOccurred(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        taker_order_id=command.order_id,
+                        maker_order_id=fill_event.maker_order_id,
+                        qty=fill_event.qty,
+                        price=fill_event.maker_price,
+                    )
+                )
         return events
 
     @handle.register
