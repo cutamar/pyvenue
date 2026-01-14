@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from pyvenue.domain.commands import PlaceLimit
+from pyvenue.domain.commands import Cancel, PlaceLimit
+from pyvenue.domain.events import Event
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 from pyvenue.engine.state import OrderRecord, OrderStatus
@@ -17,6 +18,14 @@ def _pl(
         qty=Qty(qty),
         client_ts_ns=client_ts_ns,
     )
+
+
+def _cx(inst: Instrument, oid: str, client_ts_ns: int) -> Cancel:
+    return Cancel(instrument=inst, order_id=OrderId(oid), client_ts_ns=client_ts_ns)
+
+
+def _types(events: list[Event]) -> list[str]:
+    return [e.__class__.__name__ for e in events]
 
 
 def _remaining_lots(record: OrderRecord) -> int:
@@ -82,3 +91,66 @@ def test_replay_reconstructs_same_state() -> None:
 
     snap2 = _snapshot(r)
     assert snap2 == snap1
+
+
+def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
+    """
+    Replay should rebuild the book so that:
+    - best bid/ask reflect the resting orders
+    - cancel works for resting orders after replay
+    """
+    inst = Instrument("BTC-USD")
+    e = Engine(instrument=inst)
+
+    all_events: list[Event] = []
+    # Resting ask m1: 5@100
+    all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
+
+    # Partial fill m1 with taker buys: buy 2@200
+    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1)))
+
+    # After these, m1 should still be resting (remaining 3)
+    assert e.book.best_ask() == 100
+
+    # Rebuild from events
+    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+
+    # Book should reflect the remaining resting ask
+    assert r.book.best_ask() == 100
+    assert r.book.best_bid() is None
+
+    # And cancel should work post-replay (proves it's actually in the book)
+    ev_c = r.submit(_cx(inst, "m1", 1))
+    assert "OrderCanceled" in _types(ev_c)
+
+    # Book becomes empty on ask side
+    assert r.book.best_ask() is None
+
+
+def test_replay_book_allows_matching_after_replay() -> None:
+    """
+    After replay+rebuild_book, the reconstructed book should be usable for matching.
+    Place a new crossing order and ensure a trade occurs against the resting maker.
+    """
+    inst = Instrument("BTC-USD")
+    e = Engine(instrument=inst)
+
+    all_events: list[Event] = []
+    all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 3, 1)))  # maker rests
+
+    # Replay into new engine with rebuilt book
+    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+
+    # Now cross it with a taker buy
+    ev = r.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1))
+    names = _types(ev)
+
+    assert "TradeOccurred" in names
+
+    # Maker should still be resting with remaining 1, so best ask remains 100
+    assert r.book.best_ask() == 100
+
+    # And cancel should still work
+    ev_c = r.submit(_cx(inst, "m1", 1))
+    assert "OrderCanceled" in _types(ev_c)
+    assert r.book.best_ask() is None

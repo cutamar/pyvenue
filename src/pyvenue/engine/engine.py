@@ -91,15 +91,19 @@ class Engine:
         return events
 
     @classmethod
-    def replay(cls, instrument: Instrument, events: list[Event]) -> Engine:
+    def replay(
+        cls, instrument: Instrument, events: list[Event], rebuild_book: bool = False
+    ) -> Engine:
         engine = cls(instrument=instrument)
-        # TODO: replay book without matching events
         if events:
             engine.seq = max(e.seq for e in events if e.instrument == instrument)
         for e in events:
             if e.instrument == instrument:
                 engine.log.append(e)
                 engine.state.apply(e)
+                if rebuild_book:
+                    # TODO: implement apply_event
+                    pass
         return engine
 
     @singledispatchmethod
