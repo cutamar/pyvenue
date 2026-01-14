@@ -3,9 +3,11 @@ from __future__ import annotations
 import bisect
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from functools import singledispatchmethod
 
 import structlog
 
+from pyvenue.domain.events import Event, OrderAccepted, OrderCanceled, TradeOccurred
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
 logger = structlog.get_logger(__name__)
@@ -106,6 +108,24 @@ class OrderBook:
             best_bid=self.best_bid(),
             best_ask=self.best_ask(),
         )
+
+    @singledispatchmethod
+    def apply_event(self, event: Event) -> None:
+        raise NotImplementedError(
+            f"Event type {event.__class__.__name__} not implemented"
+        )
+
+    @apply_event.register
+    def _(self, event: OrderAccepted) -> None:
+        pass
+
+    @apply_event.register
+    def _(self, event: TradeOccurred) -> None:
+        pass
+
+    @apply_event.register
+    def _(self, event: OrderCanceled) -> None:
+        pass
 
     def place_limit(self, order: RestingOrder) -> list[Fill]:
         self._log_book()

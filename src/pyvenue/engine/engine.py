@@ -102,8 +102,7 @@ class Engine:
                 engine.log.append(e)
                 engine.state.apply(e)
                 if rebuild_book:
-                    # TODO: implement apply_event
-                    pass
+                    engine.book.apply_event(e)
         return engine
 
     @singledispatchmethod
