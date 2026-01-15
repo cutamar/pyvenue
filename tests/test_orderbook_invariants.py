@@ -97,7 +97,7 @@ def test_cancel_respects_pricelevel_cancel_return_value() -> None:
     book = OrderBook(inst)
 
     # Put a real resting order at 100
-    assert book.place_limit(_o("real", inst, Side.BUY, price=100, qty=1)) == []
+    assert book.place_limit(_o("real", inst, Side.BUY, price=100, qty=1)) == ([], 1)
 
     # Corrupt: map a different order_id to the same level, but do NOT add it to the level
     book.orders_by_id[OrderId("fake")] = (Side.BUY, 100)
@@ -132,7 +132,7 @@ def test_invariant_match_raises_if_best_price_has_no_level_dict_entry() -> None:
     book = OrderBook(inst)
 
     # Create an ask level at 100
-    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=1)) == []
+    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=1)) == ([], 1)
     assert book.best_ask() == 100
     assert 100 in book.asks
 

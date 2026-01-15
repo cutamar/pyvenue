@@ -124,7 +124,7 @@ class OrderBook:
             )
         # handle TradeOccurred and OrderCanceled
         else:
-            raise ValueError(f"Event type {event.__class__.__name__} not implemented")
+            self.logger.debug("Event not implemented", trade_event=event)
 
     def _rest(self, order: RestingOrder) -> None:
         self.logger.debug("Resting order in the book", order=order)
