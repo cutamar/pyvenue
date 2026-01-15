@@ -11,6 +11,7 @@ from pyvenue.domain.events import (
     OrderAccepted,
     OrderCanceled,
     OrderRejected,
+    OrderRested,
     TopOfBookChanged,
     TradeOccurred,
 )
@@ -97,3 +98,7 @@ class EngineState:
     @apply.register
     def _(self, event: TopOfBookChanged) -> None:
         logger.debug("Applying top of book changed event", trade_event=event)
+
+    @apply.register
+    def _(self, event: OrderRested) -> None:
+        logger.debug("Applying order rested event", trade_event=event)

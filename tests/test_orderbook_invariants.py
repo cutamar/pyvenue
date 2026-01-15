@@ -27,13 +27,14 @@ def test_taker_does_not_rest_before_matching_when_fully_filled() -> None:
     book = OrderBook(inst)
 
     # Maker rests first
-    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=5)) == []
+    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=5)) == ([], 5)
 
     # Taker crosses and should fully fill immediately
-    fills = book.place_limit(_o("b1", inst, Side.BUY, price=110, qty=5))
+    fills, remaining = book.place_limit(_o("b1", inst, Side.BUY, price=110, qty=5))
     assert [(f.maker_order_id, f.maker_price.ticks, f.qty.lots) for f in fills] == [
         (OrderId("a1"), 100, 5)
     ]
+    assert remaining == 0
 
     # Maker removed (see (3) too)
     assert book.cancel(OrderId("a1")) is False

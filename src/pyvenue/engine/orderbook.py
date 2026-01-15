@@ -3,11 +3,13 @@ from __future__ import annotations
 import bisect
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from functools import singledispatchmethod
 
 import structlog
 
-from pyvenue.domain.events import Event, OrderAccepted, OrderCanceled, TradeOccurred
+from pyvenue.domain.events import (
+    Event,
+    OrderRested,
+)
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
 logger = structlog.get_logger(__name__)
@@ -109,25 +111,34 @@ class OrderBook:
             best_ask=self.best_ask(),
         )
 
-    @singledispatchmethod
     def apply_event(self, event: Event) -> None:
-        raise NotImplementedError(
-            f"Event type {event.__class__.__name__} not implemented"
-        )
+        if isinstance(event, OrderRested):
+            self._rest(
+                RestingOrder(
+                    order_id=event.order_id,
+                    instrument=event.instrument,
+                    side=event.side,
+                    price=event.price,
+                    remaining=event.qty,
+                )
+            )
+        # handle TradeOccurred and OrderCanceled
+        else:
+            raise ValueError(f"Event type {event.__class__.__name__} not implemented")
 
-    @apply_event.register
-    def _(self, event: OrderAccepted) -> None:
-        pass
+    def _rest(self, order: RestingOrder) -> None:
+        self.logger.debug("Resting order in the book", order=order)
+        price = order.price.ticks
+        self.orders_by_id[order.order_id] = (order.side, price)
+        if order.side == Side.BUY:
+            price_level = self._ensure_level(Side.BUY, price)
+        elif order.side == Side.SELL:
+            price_level = self._ensure_level(Side.SELL, price)
+        else:
+            raise ValueError(f"Invalid side: {order.side}")
+        price_level.add(order)
 
-    @apply_event.register
-    def _(self, event: TradeOccurred) -> None:
-        pass
-
-    @apply_event.register
-    def _(self, event: OrderCanceled) -> None:
-        pass
-
-    def place_limit(self, order: RestingOrder) -> list[Fill]:
+    def place_limit(self, order: RestingOrder) -> tuple[list[Fill], int]:
         self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
         if order.instrument != self.instrument:
@@ -136,22 +147,11 @@ class OrderBook:
         fills, remaining = self._match(order.side, price, order.remaining.lots)
         if remaining > 0:
             # place remaining order
-            self.logger.debug(
-                "Placing remaining order in the book", remaining=remaining
-            )
             order.remaining = Qty(remaining)
-            self.orders_by_id[order.order_id] = (order.side, price)
-            if order.side == Side.BUY:
-                price_level = self._ensure_level(Side.BUY, price)
-                price_level.add(order)
-            elif order.side == Side.SELL:
-                price_level = self._ensure_level(Side.SELL, price)
-                price_level.add(order)
-            else:
-                raise ValueError(f"Invalid side: {order.side}")
+            self._rest(order)
         self.logger.debug("Limit order placed in the book", remaining=remaining)
         self._log_book()
-        return fills
+        return fills, remaining
 
     def cancel(self, order_id: OrderId) -> bool:
         self._log_book()

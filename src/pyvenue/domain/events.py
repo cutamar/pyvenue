@@ -59,4 +59,23 @@ class TopOfBookChanged:
     best_ask_ticks: int | None
 
 
-Event = OrderAccepted | OrderRejected | OrderCanceled | TradeOccurred | TopOfBookChanged
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OrderRested:
+    type: Literal["OrderRested"] = field(default="OrderRested", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    order_id: OrderId
+    side: Side
+    price: Price
+    qty: Qty
+
+
+Event = (
+    OrderAccepted
+    | OrderRejected
+    | OrderCanceled
+    | TradeOccurred
+    | TopOfBookChanged
+    | OrderRested
+)

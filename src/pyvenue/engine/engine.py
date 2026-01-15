@@ -11,10 +11,11 @@ from pyvenue.domain.events import (
     OrderAccepted,
     OrderCanceled,
     OrderRejected,
+    OrderRested,
     TopOfBookChanged,
     TradeOccurred,
 )
-from pyvenue.domain.types import Instrument, OrderId
+from pyvenue.domain.types import Instrument, OrderId, Qty
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import Clock, EventLog, SystemClock
@@ -148,7 +149,7 @@ class Engine:
                     qty=command.qty,
                 )
             ]
-            fill_events = self.book.place_limit(
+            fill_events, remaining = self.book.place_limit(
                 RestingOrder(
                     order_id=command.order_id,
                     instrument=command.instrument,
@@ -168,6 +169,19 @@ class Engine:
                         maker_order_id=fill_event.maker_order_id,
                         qty=fill_event.qty,
                         price=fill_event.maker_price,
+                    )
+                )
+            if remaining > 0:
+                seq, ts = self._next_meta()
+                events.append(
+                    OrderRested(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        order_id=command.order_id,
+                        side=command.side,
+                        price=command.price,
+                        qty=Qty(remaining),
                     )
                 )
         return events
