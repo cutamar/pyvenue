@@ -154,3 +154,64 @@ def test_replay_book_allows_matching_after_replay() -> None:
     ev_c = r.submit(_cx(inst, "m1", 1))
     assert "OrderCanceled" in _types(ev_c)
     assert r.book.best_ask() is None
+
+
+def test_replay_book_applies_trade_occurred_to_maker_remaining() -> None:
+    """
+    Replay+rebuild_book must apply TradeOccurred to the book:
+    maker remaining decreases (and the order stays resting if remaining > 0).
+    """
+    inst = Instrument("BTC-USD")
+    e = Engine(instrument=inst)
+
+    all_events: list[Event] = []
+    # maker rests 5@100
+    all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
+    # taker buys 2, so maker remaining should become 3
+    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))
+
+    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+
+    # maker should still be resting at 100
+    assert r.book.best_ask() == 100
+
+    # and cancel should succeed (proves it's actually there)
+    assert r.book.cancel(OrderId("m1")) is True
+
+
+def test_replay_book_trade_fully_filled_maker_is_not_cancelable() -> None:
+    """
+    Replay+rebuild_book must apply TradeOccurred to the book:
+    fully filled maker order is removed and is no longer cancelable.
+    """
+    inst = Instrument("BTC-USD")
+    e = Engine(instrument=inst)
+
+    all_events: list[Event] = []
+    all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 2, 1)))
+    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))  # fully fills m1
+
+    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+
+    # If TradeOccurred is applied to the reconstructed book, m1 is gone => cancel must fail
+    assert r.book.cancel(OrderId("m1")) is False
+    assert r.book.best_ask() is None
+
+
+def test_replay_book_applies_order_canceled_removes_resting_order() -> None:
+    """
+    Replay+rebuild_book must apply OrderCanceled to the book:
+    canceled resting order is removed and is no longer cancelable.
+    """
+    inst = Instrument("BTC-USD")
+    e = Engine(instrument=inst)
+
+    all_events: list[Event] = []
+    all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
+    all_events.extend(e.submit(_cx(inst, "m1", 2)))
+
+    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+
+    # canceled order must not be present
+    assert r.book.best_ask() is None
+    assert r.book.cancel(OrderId("m1")) is False
