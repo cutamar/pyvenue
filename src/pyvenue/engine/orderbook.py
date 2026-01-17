@@ -9,6 +9,7 @@ import structlog
 from pyvenue.domain.events import (
     Event,
     OrderRested,
+    TradeOccurred,
 )
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 
@@ -55,6 +56,9 @@ class PriceLevel:
     def add(self, order: RestingOrder) -> None:
         self.logger.debug("Adding order to level", order=order)
         self.orders[order.order_id] = order
+
+    def get(self, order_id: OrderId) -> RestingOrder | None:
+        return self.orders.get(order_id, None)
 
     def cancel(self, order_id: OrderId) -> bool:
         self.logger.debug("Canceling order from level", order_id=order_id)
@@ -122,7 +126,40 @@ class OrderBook:
                     remaining=event.qty,
                 )
             )
-        # handle TradeOccurred and OrderCanceled
+        elif isinstance(event, TradeOccurred):
+            side_and_price = self.orders_by_id.get(event.maker_order_id, None)
+            if side_and_price is None:
+                raise RuntimeError(
+                    f"Order not found for order_id: {event.maker_order_id}"
+                )
+            side, price = side_and_price
+            if side == Side.BUY:
+                price_level = self.bids.get(price, None)
+            elif side == Side.SELL:
+                price_level = self.asks.get(price, None)
+            else:
+                raise RuntimeError(f"Invalid side: {side}")
+            if price_level is None:
+                raise RuntimeError(f"Price level not found for price: {price}")
+            if price != event.price.ticks:
+                raise RuntimeError(
+                    f"Price level price does not match trade price for order_id: {event.maker_order_id}"
+                )
+            order = price_level.get(event.maker_order_id)
+            if order is None:
+                raise RuntimeError(
+                    f"Order not found for order_id: {event.maker_order_id}"
+                )
+            if order.remaining.lots < event.qty.lots:
+                raise RuntimeError(
+                    f"Order remaining qty is less than trade qty for order_id: {event.maker_order_id}"
+                )
+            order.remaining = Qty(order.remaining.lots - event.qty.lots)
+            if order.remaining.lots == 0:
+                price_level.cancel(event.maker_order_id)
+                self._remove_level_if_empty(side, price)
+                self.orders_by_id.pop(event.maker_order_id, None)
+            # handle OrderCanceled
         else:
             self.logger.debug("Event not implemented", trade_event=event)
 
