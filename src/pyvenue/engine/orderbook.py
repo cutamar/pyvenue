@@ -8,6 +8,7 @@ import structlog
 
 from pyvenue.domain.events import (
     Event,
+    OrderCanceled,
     OrderRested,
     TradeOccurred,
 )
@@ -159,7 +160,22 @@ class OrderBook:
                 price_level.cancel(event.maker_order_id)
                 self._remove_level_if_empty(side, price)
                 self.orders_by_id.pop(event.maker_order_id, None)
-            # handle OrderCanceled
+        if isinstance(event, OrderCanceled):
+            side_and_price = self.orders_by_id.get(event.order_id, None)
+            if side_and_price is None:
+                raise RuntimeError(f"Order not found for order_id: {event.order_id}")
+            side, price = side_and_price
+            if side == Side.BUY:
+                price_level = self.bids.get(price, None)
+            elif side == Side.SELL:
+                price_level = self.asks.get(price, None)
+            else:
+                raise RuntimeError(f"Invalid side: {side}")
+            if price_level is None:
+                raise RuntimeError(f"Price level not found for price: {price}")
+            price_level.cancel(event.order_id)
+            self._remove_level_if_empty(side, price)
+            self.orders_by_id.pop(event.order_id, None)
         else:
             self.logger.debug("Event not implemented", trade_event=event)
 
