@@ -134,12 +134,7 @@ class OrderBook:
                     f"Order not found for order_id: {event.maker_order_id}"
                 )
             side, price = side_and_price
-            if side == Side.BUY:
-                price_level = self.bids.get(price, None)
-            elif side == Side.SELL:
-                price_level = self.asks.get(price, None)
-            else:
-                raise RuntimeError(f"Invalid side: {side}")
+            price_level = self._get_level(side, price)
             if price_level is None:
                 raise RuntimeError(f"Price level not found for price: {price}")
             if price != event.price.ticks:
@@ -160,17 +155,12 @@ class OrderBook:
                 price_level.cancel(event.maker_order_id)
                 self._remove_level_if_empty(side, price)
                 self.orders_by_id.pop(event.maker_order_id, None)
-        if isinstance(event, OrderCanceled):
+        elif isinstance(event, OrderCanceled):
             side_and_price = self.orders_by_id.get(event.order_id, None)
             if side_and_price is None:
                 raise RuntimeError(f"Order not found for order_id: {event.order_id}")
             side, price = side_and_price
-            if side == Side.BUY:
-                price_level = self.bids.get(price, None)
-            elif side == Side.SELL:
-                price_level = self.asks.get(price, None)
-            else:
-                raise RuntimeError(f"Invalid side: {side}")
+            price_level = self._get_level(side, price)
             if price_level is None:
                 raise RuntimeError(f"Price level not found for price: {price}")
             price_level.cancel(event.order_id)
