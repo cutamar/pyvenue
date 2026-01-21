@@ -53,21 +53,21 @@ def test_routes_to_correct_instrument_and_isolates_books() -> None:
     ev_btc = v.submit(_pl(BTC, "b1", Side.BUY, 100, 1, 1))
     assert "OrderAccepted" in _types(ev_btc)
     assert _bbo(ev_btc)  # BBO changed on BTC
-    assert v.books[BTC].best_bid() == 100
-    assert v.books[BTC].best_ask() is None
+    assert v.engines[BTC].book.best_bid() == 100
+    assert v.engines[BTC].book.best_ask() is None
 
-    assert v.books[ETH].best_bid() is None
-    assert v.books[ETH].best_ask() is None
+    assert v.engines[ETH].book.best_bid() is None
+    assert v.engines[ETH].book.best_ask() is None
 
     # Place an ETH ask; should not affect BTC
     ev_eth = v.submit(_pl(ETH, "a1", Side.SELL, 200, 1, 2))
     assert "OrderAccepted" in _types(ev_eth)
     assert _bbo(ev_eth)  # BBO changed on ETH
-    assert v.books[ETH].best_ask() == 200
+    assert v.engines[ETH].book.best_ask() == 200
 
     # BTC unchanged
-    assert v.books[BTC].best_bid() == 100
-    assert v.books[BTC].best_ask() is None
+    assert v.engines[BTC].book.best_bid() == 100
+    assert v.engines[BTC].book.best_ask() is None
 
 
 def test_unknown_instrument_rejected() -> None:
@@ -135,17 +135,17 @@ def test_replay_reconstructs_multiple_books() -> None:
     all_events.extend(v.submit(_pl(ETH, "b1", Side.BUY, 50, 1, 3)))
     all_events.extend(v.submit(_cx(ETH, "b1", 4)))
 
-    r = Venue.replay(instruments=[BTC, ETH], events=all_events, rebuild_books=True)
+    r = Venue.replay(instruments=[BTC, ETH], events=all_events)
 
     # BTC should still have a resting ask at 100 (remaining 3)
-    assert r.books[BTC].best_ask() == 100
-    assert r.books[BTC].best_bid() is None
+    assert r.engines[BTC].book.best_ask() == 100
+    assert r.engines[BTC].book.best_bid() is None
 
     # ETH should be empty (bid was canceled)
-    assert r.books[ETH].best_bid() is None
-    assert r.books[ETH].best_ask() is None
+    assert r.engines[ETH].book.best_bid() is None
+    assert r.engines[ETH].book.best_ask() is None
 
     # Prove replayed books are usable: cancel remaining BTC maker should succeed
     ev_c = r.submit(_cx(BTC, "m1", 10))
     assert "OrderCanceled" in _types(ev_c)
-    assert r.books[BTC].best_ask() is None
+    assert r.engines[BTC].book.best_ask() is None
