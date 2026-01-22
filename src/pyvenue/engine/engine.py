@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import singledispatchmethod
 
@@ -26,33 +27,35 @@ logger = structlog.get_logger(__name__)
 @dataclass(slots=True)
 class Engine:
     instrument: Instrument
-    clock: Clock = field(default_factory=SystemClock)
+    next_meta: Callable[[], tuple[int, int]] | None = field(default=None)
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
-    seq: int = field(default=0)
     book: OrderBook = field(init=False)
     logger: structlog.BoundLogger = field(init=False)
+    seq: int = field(default=0)
+    clock: Clock = field(default_factory=SystemClock)
 
     def __post_init__(self) -> None:
         self.book = OrderBook(self.instrument)
         self.logger = logger.bind(
             _component=self.__class__.__name__,
             instrument=self.instrument,
-            clock=self.clock,
         )
+        if self.next_meta is None:
+            self.next_meta = self._next_meta
         self.logger.info(
             "Engine initialized",
-            start_seq=self.seq,
         )
 
     def _next_meta(self) -> tuple[int, int]:
+        # TODO: remove in the future, fallback for tests
         self.seq += 1
         return self.seq, self.clock.now_ns()
 
     def _reject(
         self, instrument: Instrument, order_id: OrderId, reason: str
     ) -> OrderRejected:
-        seq, ts = self._next_meta()
+        seq, ts = self.next_meta()
         return OrderRejected(
             seq=seq,
             ts_ns=ts,
@@ -76,7 +79,7 @@ class Engine:
             top_of_book = self.book.top_of_book()
             events = self.handle(command)
             if top_of_book != self.book.top_of_book():
-                seq, ts = self._next_meta()
+                seq, ts = self.next_meta()
                 events.append(
                     TopOfBookChanged(
                         seq=seq,
@@ -93,9 +96,13 @@ class Engine:
 
     @classmethod
     def replay(
-        cls, instrument: Instrument, events: list[Event], rebuild_book: bool = False
+        cls,
+        instrument: Instrument,
+        events: list[Event],
+        next_meta: Callable[[], tuple[int, int]] | None = None,
+        rebuild_book: bool = False,
     ) -> Engine:
-        engine = cls(instrument=instrument)
+        engine = cls(instrument=instrument, next_meta=next_meta)
         if events:
             engine.seq = max(e.seq for e in events if e.instrument == instrument)
         for e in events:
@@ -136,7 +143,7 @@ class Engine:
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
         else:
-            seq, ts = self._next_meta()
+            seq, ts = self.next_meta()
             self.logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
             events: list[Event] = [
                 OrderAccepted(
@@ -159,7 +166,7 @@ class Engine:
                 )
             )
             for fill_event in fill_events:
-                seq, ts = self._next_meta()
+                seq, ts = self.next_meta()
                 events.append(
                     TradeOccurred(
                         seq=seq,
@@ -172,7 +179,7 @@ class Engine:
                     )
                 )
             if remaining > 0:
-                seq, ts = self._next_meta()
+                seq, ts = self.next_meta()
                 events.append(
                     OrderRested(
                         seq=seq,
@@ -217,7 +224,7 @@ class Engine:
                 )
             ]
 
-        seq, ts = self._next_meta()
+        seq, ts = self.next_meta()
         self.logger.debug("Cancel seq and ts", seq=seq, ts=ts)
         return [
             OrderCanceled(

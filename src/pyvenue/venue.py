@@ -6,23 +6,30 @@ from pyvenue.domain.commands import Command
 from pyvenue.domain.events import Event, OrderRejected
 from pyvenue.domain.types import Instrument
 from pyvenue.engine.engine import Engine
+from pyvenue.infra import Clock, SystemClock
 
 
 class Venue:
     def __init__(self, instruments: list[Instrument]) -> None:
         self.instruments = instruments
         self.engines: dict[Instrument, Engine] = {
-            inst: Engine(inst) for inst in instruments
+            inst: Engine(inst, next_meta=self._next_meta) for inst in instruments
         }
+        self.clock: Clock = SystemClock()
+        self.seq = 0
+
+    def _next_meta(self) -> tuple[int, int]:
+        self.seq += 1
+        return self.seq, self.clock.now_ns()
 
     def submit(self, command: Command) -> list[Event]:
         events: list[Event] = []
         if command.instrument not in self.engines:
-            # TODO: sequence number
+            seq, ts = self._next_meta()
             events.append(
                 OrderRejected(
-                    seq=1,
-                    ts_ns=1,
+                    seq=seq,
+                    ts_ns=ts,
                     instrument=command.instrument,
                     order_id=command.order_id,
                     reason="instrument not found",
@@ -44,5 +51,7 @@ class Venue:
         for event in events:
             instrument_to_events[event.instrument].append(event)
         for instrument, events in instrument_to_events.items():
-            venue.engines[instrument] = Engine.replay(instrument, events, rebuild_book)
+            venue.engines[instrument] = Engine.replay(
+                instrument, events, venue._next_meta, rebuild_book
+            )
         return venue
