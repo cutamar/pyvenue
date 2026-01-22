@@ -5,6 +5,7 @@ from pyvenue.domain.events import Event
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 from pyvenue.engine.state import OrderRecord, OrderStatus
+from utils import NextMeta
 
 
 def _pl(
@@ -46,7 +47,7 @@ def _snapshot(engine: Engine) -> dict[OrderId, tuple[OrderStatus, int]]:
 
 def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     # Maker rests: sell 5 @ 100
     e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1))
@@ -76,7 +77,7 @@ def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
 
 def test_replay_reconstructs_same_state() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     all_events = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
@@ -87,7 +88,7 @@ def test_replay_reconstructs_same_state() -> None:
 
     # You implement this in milestone 3:
     # either a @classmethod or a standalone helper; test expects a classmethod:
-    r = Engine.replay(instrument=inst, events=all_events)
+    r = Engine.replay(instrument=inst, events=all_events, next_meta=NextMeta())
 
     snap2 = _snapshot(r)
     assert snap2 == snap1
@@ -100,7 +101,7 @@ def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
     - cancel works for resting orders after replay
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     all_events: list[Event] = []
     # Resting ask m1: 5@100
@@ -113,7 +114,9 @@ def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
     assert e.book.best_ask() == 100
 
     # Rebuild from events
-    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+    r = Engine.replay(
+        instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
+    )
 
     # Book should reflect the remaining resting ask
     assert r.book.best_ask() == 100
@@ -133,13 +136,15 @@ def test_replay_book_allows_matching_after_replay() -> None:
     Place a new crossing order and ensure a trade occurs against the resting maker.
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     all_events: list[Event] = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 3, 1)))  # maker rests
 
     # Replay into new engine with rebuilt book
-    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+    r = Engine.replay(
+        instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
+    )
 
     # Now cross it with a taker buy
     ev = r.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1))
@@ -162,7 +167,7 @@ def test_replay_book_applies_trade_occurred_to_maker_remaining() -> None:
     maker remaining decreases (and the order stays resting if remaining > 0).
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     all_events: list[Event] = []
     # maker rests 5@100
@@ -170,7 +175,9 @@ def test_replay_book_applies_trade_occurred_to_maker_remaining() -> None:
     # taker buys 2, so maker remaining should become 3
     all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))
 
-    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+    r = Engine.replay(
+        instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
+    )
 
     # maker should still be resting at 100
     assert r.book.best_ask() == 100
@@ -185,13 +192,15 @@ def test_replay_book_trade_fully_filled_maker_is_not_cancelable() -> None:
     fully filled maker order is removed and is no longer cancelable.
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     all_events: list[Event] = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 2, 1)))
     all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))  # fully fills m1
 
-    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+    r = Engine.replay(
+        instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
+    )
 
     # If TradeOccurred is applied to the reconstructed book, m1 is gone => cancel must fail
     assert r.book.cancel(OrderId("m1")) is False
@@ -204,13 +213,15 @@ def test_replay_book_applies_order_canceled_removes_resting_order() -> None:
     canceled resting order is removed and is no longer cancelable.
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     all_events: list[Event] = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
     all_events.extend(e.submit(_cx(inst, "m1", 2)))
 
-    r = Engine.replay(instrument=inst, events=all_events, rebuild_book=True)
+    r = Engine.replay(
+        instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
+    )
 
     # canceled order must not be present
     assert r.book.best_ask() is None

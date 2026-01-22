@@ -48,6 +48,8 @@ class Venue:
     ) -> Venue:
         venue = cls(instruments)
         instrument_to_events = defaultdict(list)
+        if events:
+            venue.seq = max(e.seq for e in events if e.instrument in instruments)
         for event in events:
             instrument_to_events[event.instrument].append(event)
         for instrument, events in instrument_to_events.items():

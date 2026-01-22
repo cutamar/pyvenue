@@ -4,6 +4,7 @@ from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.events import Event, TopOfBookChanged
 from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
+from utils import NextMeta
 
 
 def _pl(
@@ -34,7 +35,7 @@ def _bbo(events: list[Event]) -> list[TopOfBookChanged]:
 
 def test_bbo_emitted_on_first_bid() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     events = e.submit(_pl(inst, "b1", Side.BUY, 100, 1, 1))
     bbo = _bbo(events)
@@ -47,7 +48,7 @@ def test_bbo_emitted_on_first_bid() -> None:
 
 def test_bbo_emitted_on_first_ask() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     events = e.submit(_pl(inst, "a1", Side.SELL, 101, 1, 1))
     bbo = _bbo(events)
@@ -59,7 +60,7 @@ def test_bbo_emitted_on_first_ask() -> None:
 
 def test_bbo_updates_when_best_ask_level_removed_by_trade() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     # Rest two asks: best ask is 100, next is 105
     e.submit(_pl(inst, "a1", Side.SELL, 100, 1, 1))
@@ -75,7 +76,7 @@ def test_bbo_updates_when_best_ask_level_removed_by_trade() -> None:
 
 def test_bbo_updates_when_best_bid_level_removed_by_cancel() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     # Rest two bids: best bid is 110
     e.submit(_pl(inst, "b1", Side.BUY, 100, 1, 1))
@@ -90,7 +91,7 @@ def test_bbo_updates_when_best_bid_level_removed_by_cancel() -> None:
 
 def test_bbo_not_emitted_when_top_of_book_unchanged() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst)
+    e = Engine(instrument=inst, next_meta=NextMeta())
 
     # Establish top-of-book with best bid 100
     e.submit(_pl(inst, "b1", Side.BUY, 100, 1, 1))

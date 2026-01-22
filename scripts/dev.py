@@ -6,7 +6,7 @@ from pyvenue.engine import Engine
 
 
 def main() -> None:
-    engine = Engine(instrument=Instrument("BTC-USD"))
+    engine = Engine(instrument=Instrument("BTC-USD"), next_meta=lambda: (1, 1))
     cmds = [
         PlaceLimit(
             instrument=Instrument("BTC-USD"),

@@ -19,7 +19,7 @@ from pyvenue.domain.events import (
 from pyvenue.domain.types import Instrument, OrderId, Qty
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
-from pyvenue.infra import Clock, EventLog, SystemClock
+from pyvenue.infra import EventLog
 
 logger = structlog.get_logger(__name__)
 
@@ -27,13 +27,11 @@ logger = structlog.get_logger(__name__)
 @dataclass(slots=True)
 class Engine:
     instrument: Instrument
-    next_meta: Callable[[], tuple[int, int]] | None = field(default=None)
+    next_meta: Callable[[], tuple[int, int]]
     state: EngineState = field(default_factory=EngineState)
     log: EventLog = field(default_factory=EventLog)
     book: OrderBook = field(init=False)
     logger: structlog.BoundLogger = field(init=False)
-    seq: int = field(default=0)
-    clock: Clock = field(default_factory=SystemClock)
 
     def __post_init__(self) -> None:
         self.book = OrderBook(self.instrument)
@@ -41,16 +39,9 @@ class Engine:
             _component=self.__class__.__name__,
             instrument=self.instrument,
         )
-        if self.next_meta is None:
-            self.next_meta = self._next_meta
         self.logger.info(
             "Engine initialized",
         )
-
-    def _next_meta(self) -> tuple[int, int]:
-        # TODO: remove in the future, fallback for tests
-        self.seq += 1
-        return self.seq, self.clock.now_ns()
 
     def _reject(
         self, instrument: Instrument, order_id: OrderId, reason: str
@@ -99,12 +90,10 @@ class Engine:
         cls,
         instrument: Instrument,
         events: list[Event],
-        next_meta: Callable[[], tuple[int, int]] | None = None,
+        next_meta: Callable[[], tuple[int, int]],
         rebuild_book: bool = False,
     ) -> Engine:
         engine = cls(instrument=instrument, next_meta=next_meta)
-        if events:
-            engine.seq = max(e.seq for e in events if e.instrument == instrument)
         for e in events:
             if e.instrument == instrument:
                 engine.log.append(e)
