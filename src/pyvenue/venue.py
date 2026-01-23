@@ -52,6 +52,9 @@ class Venue:
             venue.seq = max(e.seq for e in events if e.instrument in instruments)
         for event in events:
             instrument_to_events[event.instrument].append(event)
+        for instrument in instrument_to_events:
+            if instrument not in instruments:
+                raise RuntimeError(f"instrument {instrument} not found")
         for instrument, events in instrument_to_events.items():
             venue.engines[instrument] = Engine.replay(
                 instrument, events, venue._next_meta, rebuild_book
