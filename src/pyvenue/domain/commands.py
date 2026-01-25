@@ -22,4 +22,13 @@ class Cancel:
     client_ts_ns: int
 
 
-Command = PlaceLimit | Cancel
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlaceMarket:
+    instrument: Instrument
+    order_id: OrderId
+    side: Side
+    qty: Qty
+    client_ts_ns: int
+
+
+Command = PlaceLimit | Cancel | PlaceMarket

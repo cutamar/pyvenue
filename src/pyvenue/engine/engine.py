@@ -6,7 +6,7 @@ from functools import singledispatchmethod
 
 import structlog
 
-from pyvenue.domain.commands import Cancel, Command, PlaceLimit
+from pyvenue.domain.commands import Cancel, Command, PlaceLimit, PlaceMarket
 from pyvenue.domain.events import (
     Event,
     OrderAccepted,
@@ -106,6 +106,88 @@ class Engine:
     def handle(self, command: Command) -> list[Event]:
         self.logger.warning("Unsupported command", command=command)
         raise TypeError(f"Unsupported command {type(command)!r}")
+
+    @handle.register
+    def _(self, command: PlaceMarket) -> list[Event]:
+        self.logger.debug("Handling PlaceMarket command", command=command)
+        if command.qty.lots <= 0:
+            self.logger.warning(
+                "PlaceMarket command rejected: qty must be > 0", command=command
+            )
+            events = [
+                self._reject(command.instrument, command.order_id, "qty must be > 0")
+            ]
+        elif command.order_id in self.state.orders:
+            self.logger.warning(
+                "PlaceMarket command rejected: duplicate order_id", command=command
+            )
+            events = [
+                self._reject(command.instrument, command.order_id, "duplicate order_id")
+            ]
+        else:
+            seq, ts = self.next_meta()
+            self.logger.debug("PlaceMarket seq and ts", seq=seq, ts=ts)
+            price = (
+                self.book.best_ask()
+                if command.side == Side.BUY
+                else self.book.best_bid()
+            )
+            if price is None:
+                self.logger.warning(
+                    "PlaceMarket command rejected: no best bid/ask", command=command
+                )
+                events = [
+                    self._reject(
+                        command.instrument, command.order_id, "no best bid/ask"
+                    )
+                ]
+            events: list[Event] = [
+                OrderAccepted(
+                    seq=seq,
+                    ts_ns=ts,
+                    instrument=command.instrument,
+                    order_id=command.order_id,
+                    side=command.side,
+                    price=price,
+                    qty=command.qty,
+                )
+            ]
+            fill_events, remaining = self.book.place_market(
+                RestingOrder(
+                    order_id=command.order_id,
+                    instrument=command.instrument,
+                    side=command.side,
+                    price=price,
+                    remaining=command.qty,
+                )
+            )
+            for fill_event in fill_events:
+                seq, ts = self.next_meta()
+                events.append(
+                    TradeOccurred(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        taker_order_id=command.order_id,
+                        maker_order_id=fill_event.maker_order_id,
+                        qty=fill_event.qty,
+                        price=fill_event.maker_price,
+                    )
+                )
+            if remaining > 0:
+                seq, ts = self.next_meta()
+                events.append(
+                    OrderRested(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        order_id=command.order_id,
+                        side=command.side,
+                        price=price,
+                        qty=Qty(remaining),
+                    )
+                )
+        return events
 
     @handle.register
     def _(self, command: PlaceLimit) -> list[Event]:
