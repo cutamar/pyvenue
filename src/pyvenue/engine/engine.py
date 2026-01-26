@@ -11,6 +11,7 @@ from pyvenue.domain.events import (
     Event,
     OrderAccepted,
     OrderCanceled,
+    OrderExpired,
     OrderRejected,
     OrderRested,
     TopOfBookChanged,
@@ -159,7 +160,8 @@ class Engine:
                     side=command.side,
                     price=price,
                     remaining=command.qty,
-                )
+                ),
+                rest=False,
             )
             for fill_event in fill_events:
                 seq, ts = self.next_meta()
@@ -177,13 +179,11 @@ class Engine:
             if remaining > 0:
                 seq, ts = self.next_meta()
                 events.append(
-                    OrderRested(
+                    OrderExpired(
                         seq=seq,
                         ts_ns=ts,
                         instrument=command.instrument,
                         order_id=command.order_id,
-                        side=command.side,
-                        price=price,
                         qty=Qty(remaining),
                     )
                 )

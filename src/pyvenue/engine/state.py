@@ -10,6 +10,7 @@ from pyvenue.domain.events import (
     Event,
     OrderAccepted,
     OrderCanceled,
+    OrderExpired,
     OrderRejected,
     OrderRested,
     TopOfBookChanged,
@@ -24,6 +25,7 @@ class OrderStatus(str, Enum):
     ACTIVE = "ACTIVE"
     CANCELED = "CANCELED"
     FILLED = "FILLED"
+    EXPIRED = "EXPIRED"
 
 
 @dataclass(slots=True, kw_only=True)
@@ -88,6 +90,14 @@ class EngineState:
             record.remaining = Qty(max(0, new_remaining))
             if record.remaining.lots == 0 and record.status == OrderStatus.ACTIVE:
                 record.status = OrderStatus.FILLED
+        self._log_state()
+
+    @apply.register
+    def _(self, event: OrderExpired) -> None:
+        logger.debug("Applying order expired event", trade_event=event)
+        record = self.orders.get(event.order_id)
+        if record is not None:
+            record.status = OrderStatus.EXPIRED
         self._log_state()
 
     @apply.register

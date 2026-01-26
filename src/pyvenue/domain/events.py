@@ -71,6 +71,16 @@ class OrderRested:
     qty: Qty
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OrderExpired:
+    type: Literal["OrderExpired"] = field(default="OrderExpired", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    order_id: OrderId
+    qty: Qty
+
+
 Event = (
     OrderAccepted
     | OrderRejected
@@ -78,4 +88,5 @@ Event = (
     | TradeOccurred
     | TopOfBookChanged
     | OrderRested
+    | OrderExpired
 )

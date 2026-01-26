@@ -181,7 +181,9 @@ class OrderBook:
             raise ValueError(f"Invalid side: {order.side}")
         price_level.add(order)
 
-    def place_limit(self, order: RestingOrder) -> tuple[list[Fill], int]:
+    def place_limit(
+        self, order: RestingOrder, rest: bool = True
+    ) -> tuple[list[Fill], int]:
         self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
         if order.instrument != self.instrument:
@@ -191,7 +193,8 @@ class OrderBook:
         if remaining > 0:
             # place remaining order
             order.remaining = Qty(remaining)
-            self._rest(order)
+            if rest:
+                self._rest(order)
         self.logger.debug("Limit order placed in the book", remaining=remaining)
         self._log_book()
         return fills, remaining
