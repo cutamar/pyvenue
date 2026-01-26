@@ -17,7 +17,7 @@ from pyvenue.domain.events import (
     TopOfBookChanged,
     TradeOccurred,
 )
-from pyvenue.domain.types import Instrument, OrderId, Qty
+from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import EventLog
@@ -142,6 +142,8 @@ class Engine:
                         command.instrument, command.order_id, "no best bid/ask"
                     )
                 ]
+                return events
+            price = Price(price)
             events: list[Event] = [
                 OrderAccepted(
                     seq=seq,
@@ -153,7 +155,7 @@ class Engine:
                     qty=command.qty,
                 )
             ]
-            fill_events, remaining = self.book.place_market(
+            fill_events, remaining = self.book.place_limit(
                 RestingOrder(
                     order_id=command.order_id,
                     instrument=command.instrument,
@@ -185,6 +187,7 @@ class Engine:
                         instrument=command.instrument,
                         order_id=command.order_id,
                         qty=Qty(remaining),
+                        reason="unfilled",
                     )
                 )
         return events

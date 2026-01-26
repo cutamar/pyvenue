@@ -25,3 +25,9 @@ class Qty:
     """Quantity in integer lots."""
 
     lots: int
+
+
+class TimeInForce(str, Enum):
+    GTC = "GTC"
+    IOC = "IOC"
+    FOK = "FOK"

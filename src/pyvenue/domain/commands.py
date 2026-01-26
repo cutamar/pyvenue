@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side, TimeInForce
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -13,6 +13,8 @@ class PlaceLimit:
     price: Price
     qty: Qty
     client_ts_ns: int
+    tif: TimeInForce = TimeInForce.GTC
+    post_only: bool = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

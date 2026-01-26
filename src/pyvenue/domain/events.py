@@ -79,6 +79,7 @@ class OrderExpired:
     instrument: Instrument
     order_id: OrderId
     qty: Qty
+    reason: str
 
 
 Event = (
