@@ -114,7 +114,7 @@ def test_market_buy_on_empty_book_expires_or_rejects() -> None:
     # We expect an explicit terminal outcome for the taker.
     # This test expects OrderExpired to exist.
     assert "OrderExpired" in names
-    exp = [x for x in ev if isinstance(x, OrderExpired)][0]
+    exp = next(x for x in ev if isinstance(x, OrderExpired))
     assert exp.order_id == OrderId("mb1")
 
 
@@ -134,7 +134,7 @@ def test_ioc_limit_crosses_then_expires_remainder_and_does_not_rest() -> None:
     assert sum(t.qty.lots for t in _trades(ev)) == 2
 
     assert "OrderExpired" in names  # remainder expired
-    exp = [x for x in ev if isinstance(x, OrderExpired)][0]
+    exp = next(x for x in ev if isinstance(x, OrderExpired))
     assert exp.order_id == OrderId("ioc1")
 
     # a1 was fully filled -> asks empty
