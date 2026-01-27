@@ -237,7 +237,8 @@ class Engine:
                     side=command.side,
                     price=command.price,
                     remaining=command.qty,
-                )
+                ),
+                post_only=command.post_only,
             )
             for fill_event in fill_events:
                 seq, ts = self.next_meta()
