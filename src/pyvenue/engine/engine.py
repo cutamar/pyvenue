@@ -17,7 +17,7 @@ from pyvenue.domain.events import (
     TopOfBookChanged,
     TradeOccurred,
 )
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side, TimeInForce
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import EventLog
@@ -255,17 +255,29 @@ class Engine:
                 )
             if remaining > 0:
                 seq, ts = self.next_meta()
-                events.append(
-                    OrderRested(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        order_id=command.order_id,
-                        side=command.side,
-                        price=command.price,
-                        qty=Qty(remaining),
+                if command.tif == TimeInForce.GTC:
+                    events.append(
+                        OrderRested(
+                            seq=seq,
+                            ts_ns=ts,
+                            instrument=command.instrument,
+                            order_id=command.order_id,
+                            side=command.side,
+                            price=command.price,
+                            qty=Qty(remaining),
+                        )
                     )
-                )
+                elif command.tif == TimeInForce.IOC:
+                    events.append(
+                        OrderExpired(
+                            seq=seq,
+                            ts_ns=ts,
+                            instrument=command.instrument,
+                            order_id=command.order_id,
+                            qty=Qty(remaining),
+                            reason="IOC",
+                        )
+                    )
         return events
 
     @handle.register
