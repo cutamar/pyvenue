@@ -182,16 +182,14 @@ class OrderBook:
         price_level.add(order)
 
     def place_limit(
-        self, order: RestingOrder, rest: bool = True, post_only: bool = False
+        self, order: RestingOrder, rest: bool = True
     ) -> tuple[list[Fill], int]:
         self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
         if order.instrument != self.instrument:
             raise ValueError("Order instrument does not match book instrument")
         price = order.price.ticks
-        fills, remaining = self._match(
-            order.side, price, order.remaining.lots, post_only
-        )
+        fills, remaining = self._match(order.side, price, order.remaining.lots)
         if remaining > 0:
             # place remaining order
             order.remaining = Qty(remaining)
@@ -287,7 +285,6 @@ class OrderBook:
         taker_side: Side,
         taker_price_ticks: int,
         taker_qty_lots: int,
-        post_only: bool = False,
     ) -> tuple[list[Fill], int]:
         if taker_side == Side.BUY:
             maker_side = Side.SELL
@@ -305,9 +302,7 @@ class OrderBook:
             if best_opp_price_ticks is None:
                 break
 
-            if post_only and not self._crosses(
-                taker_side, taker_price_ticks, best_opp_price_ticks
-            ):
+            if not self._crosses(taker_side, taker_price_ticks, best_opp_price_ticks):
                 break
 
             maker_level = self._get_level(maker_side, best_opp_price_ticks)

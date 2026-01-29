@@ -230,6 +230,7 @@ class Engine:
                     qty=command.qty,
                 )
             ]
+            rest = not command.post_only and command.tif == TimeInForce.GTC
             fill_events, remaining = self.book.place_limit(
                 RestingOrder(
                     order_id=command.order_id,
@@ -238,7 +239,7 @@ class Engine:
                     price=command.price,
                     remaining=command.qty,
                 ),
-                post_only=command.post_only,
+                rest=rest,
             )
             for fill_event in fill_events:
                 seq, ts = self.next_meta()
@@ -256,17 +257,28 @@ class Engine:
             if remaining > 0:
                 seq, ts = self.next_meta()
                 if command.tif == TimeInForce.GTC:
-                    events.append(
-                        OrderRested(
-                            seq=seq,
-                            ts_ns=ts,
-                            instrument=command.instrument,
-                            order_id=command.order_id,
-                            side=command.side,
-                            price=command.price,
-                            qty=Qty(remaining),
+                    if command.post_only:
+                        events.append(
+                            OrderRejected(
+                                seq=seq,
+                                ts_ns=ts,
+                                instrument=command.instrument,
+                                order_id=command.order_id,
+                                reason="post-only order would cross",
+                            )
                         )
-                    )
+                    else:
+                        events.append(
+                            OrderRested(
+                                seq=seq,
+                                ts_ns=ts,
+                                instrument=command.instrument,
+                                order_id=command.order_id,
+                                side=command.side,
+                                price=command.price,
+                                qty=Qty(remaining),
+                            )
+                        )
                 elif command.tif == TimeInForce.IOC:
                     events.append(
                         OrderExpired(
