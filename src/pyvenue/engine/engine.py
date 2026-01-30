@@ -217,6 +217,29 @@ class Engine:
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
         else:
+            if command.post_only:
+                crosses = False
+                if command.side == Side.BUY:
+                    best_ask = self.book.best_ask()
+                    if best_ask is not None and command.price.ticks >= best_ask:
+                        crosses = True
+                elif command.side == Side.SELL:
+                    best_bid = self.book.best_bid()
+                    if best_bid is not None and command.price.ticks <= best_bid:
+                        crosses = True
+
+                if crosses:
+                    self.logger.warning(
+                        "PlaceLimit rejected: post-only would cross", command=command
+                    )
+                    return [
+                        self._reject(
+                            command.instrument,
+                            command.order_id,
+                            "post-only order would cross",
+                        )
+                    ]
+
             seq, ts = self.next_meta()
             self.logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
             events: list[Event] = [
@@ -230,7 +253,7 @@ class Engine:
                     qty=command.qty,
                 )
             ]
-            rest = not command.post_only and command.tif == TimeInForce.GTC
+            rest = command.tif == TimeInForce.GTC
             fill_events, remaining = self.book.place_limit(
                 RestingOrder(
                     order_id=command.order_id,
@@ -257,28 +280,17 @@ class Engine:
             if remaining > 0:
                 seq, ts = self.next_meta()
                 if command.tif == TimeInForce.GTC:
-                    if command.post_only:
-                        events.append(
-                            OrderRejected(
-                                seq=seq,
-                                ts_ns=ts,
-                                instrument=command.instrument,
-                                order_id=command.order_id,
-                                reason="post-only order would cross",
-                            )
+                    events.append(
+                        OrderRested(
+                            seq=seq,
+                            ts_ns=ts,
+                            instrument=command.instrument,
+                            order_id=command.order_id,
+                            side=command.side,
+                            price=command.price,
+                            qty=Qty(remaining),
                         )
-                    else:
-                        events.append(
-                            OrderRested(
-                                seq=seq,
-                                ts_ns=ts,
-                                instrument=command.instrument,
-                                order_id=command.order_id,
-                                side=command.side,
-                                price=command.price,
-                                qty=Qty(remaining),
-                            )
-                        )
+                    )
                 elif command.tif == TimeInForce.IOC:
                     events.append(
                         OrderExpired(
