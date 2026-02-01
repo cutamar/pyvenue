@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import singledispatchmethod
@@ -128,12 +129,13 @@ class Engine:
         else:
             seq, ts = self.next_meta()
             self.logger.debug("PlaceMarket seq and ts", seq=seq, ts=ts)
-            price = (
+
+            best_opp = (
                 self.book.best_ask()
                 if command.side == Side.BUY
                 else self.book.best_bid()
             )
-            if price is None:
+            if best_opp is None:
                 self.logger.warning(
                     "PlaceMarket command rejected: no best bid/ask", command=command
                 )
@@ -143,7 +145,10 @@ class Engine:
                     )
                 ]
                 return events
-            price = Price(price)
+
+            aggressive_price = sys.maxsize if command.side == Side.BUY else 1
+            price = Price(aggressive_price)
+
             events: list[Event] = [
                 OrderAccepted(
                     seq=seq,
