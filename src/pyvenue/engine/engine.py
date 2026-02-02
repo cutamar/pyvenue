@@ -130,22 +130,6 @@ class Engine:
             seq, ts = self.next_meta()
             self.logger.debug("PlaceMarket seq and ts", seq=seq, ts=ts)
 
-            best_opp = (
-                self.book.best_ask()
-                if command.side == Side.BUY
-                else self.book.best_bid()
-            )
-            if best_opp is None:
-                self.logger.warning(
-                    "PlaceMarket command rejected: no best bid/ask", command=command
-                )
-                events = [
-                    self._reject(
-                        command.instrument, command.order_id, "no best bid/ask"
-                    )
-                ]
-                return events
-
             aggressive_price = sys.maxsize if command.side == Side.BUY else 1
             price = Price(aggressive_price)
 
