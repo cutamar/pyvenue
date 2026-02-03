@@ -231,6 +231,18 @@ class Engine:
 
             seq, ts = self.next_meta()
             self.logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
+
+            if command.tif == TimeInForce.FOK and not self.book.can_match(
+                command.side, command.price.ticks, command.qty.lots
+            ):
+                return [
+                    self._reject(
+                        command.instrument,
+                        command.order_id,
+                        "FOK order not fully fillable",
+                    )
+                ]
+
             events: list[Event] = [
                 OrderAccepted(
                     seq=seq,
@@ -242,6 +254,7 @@ class Engine:
                     qty=command.qty,
                 )
             ]
+
             rest = command.tif == TimeInForce.GTC
             fill_events, remaining = self.book.place_limit(
                 RestingOrder(

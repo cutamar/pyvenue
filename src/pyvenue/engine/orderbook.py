@@ -280,6 +280,54 @@ class OrderBook:
         else:
             raise ValueError(f"Invalid side: {taker_side}")
 
+    def can_match(
+        self,
+        taker_side: Side,
+        taker_price_ticks: int,
+        taker_qty_lots: int,
+    ) -> bool:
+        """Check if a taker order can be fully filled immediately."""
+
+        # Iterate through levels (simulated)
+        # Note: we need to iterate in price priority order
+        # Since we don't have a direct "iter levels" method that is clean,
+        # we can just use the price lists or reuse the logic from _match but carefully
+        # inspecting without popping.
+
+        # Iterate through prices
+        # For BUY: lowest ask first (ascending order) -> self.ask_prices is sorted ascending
+        # For SELL: highest bid first (descending order) -> self.bid_prices is sorted ascending, so iterate reversed
+        if taker_side == Side.BUY:
+            maker_side = Side.SELL
+            opp_prices = self.ask_prices
+            price_iter = iter(opp_prices)
+        elif taker_side == Side.SELL:
+            maker_side = Side.BUY
+            opp_prices = self.bid_prices
+            price_iter = reversed(opp_prices)
+        else:
+            raise ValueError(f"Invalid side: {taker_side}")
+
+        qty_to_fill = taker_qty_lots
+
+        for price_ticks in price_iter:
+            if not self._crosses(taker_side, taker_price_ticks, price_ticks):
+                break
+
+            level = self._get_level(maker_side, price_ticks)
+            if level is None:
+                continue
+
+            # Sum up qty in this level
+            level_qty = sum(o.remaining.lots for o in level.orders.values())
+
+            if level_qty >= qty_to_fill:
+                return True
+
+            qty_to_fill -= level_qty
+
+        return qty_to_fill <= 0
+
     def _match(
         self,
         taker_side: Side,
