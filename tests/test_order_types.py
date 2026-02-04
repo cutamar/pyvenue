@@ -254,3 +254,119 @@ def test_post_only_rest_if_it_does_not_cross() -> None:
     # bid should rest
     assert e.book.best_bid() == 90
     assert e.book.best_ask() == 100
+
+
+def test_market_sell_partially_fills_then_expires_remainder_and_consumes_bids() -> None:
+    """
+    Setup bids:
+      b1: 2 @ 100
+    Market sell 5 => fills 2@100, expires remaining 3, leaves book empty.
+    """
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
+
+    e.submit(_pl_limit("b1", Side.BUY, 100, 2, 1))
+
+    ev = e.submit(_pl_mkt("ms1", Side.SELL, 5, 2))
+    names = _types(ev)
+
+    assert "TradeOccurred" in names
+    assert sum(t.qty.lots for t in _trades(ev)) == 2
+    assert "OrderExpired" in names
+
+    # bids consumed
+    assert e.book.best_bid() is None
+    assert e.book.best_ask() is None
+
+
+def test_ioc_limit_partial_fill_expires_only_the_remainder() -> None:
+    """
+    Setup asks:
+      a1: 2 @ 100
+      a2: 10 @ 110
+    IOC buy 5 @ 100 => fills 2@100, remainder 3 expires (does not rest)
+    """
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
+
+    e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
+    e.submit(_pl_limit("a2", Side.SELL, 110, 10, 2))
+
+    ev = e.submit(_pl_limit("ioc1", Side.BUY, 100, 5, 3, tif=TimeInForce.IOC))
+    names = _types(ev)
+
+    assert "TradeOccurred" in names
+    assert sum(t.qty.lots for t in _trades(ev)) == 2
+    assert "OrderExpired" in names
+
+    # ask a2 untouched, best ask now 110
+    assert e.book.best_ask() == 110
+    assert e.book.best_bid() is None
+
+
+def test_fok_limit_not_fillable_due_to_price_constraint_rejects_without_mutation() -> (
+    None
+):
+    """
+    Setup asks:
+      a1: 10 @ 101
+    FOK buy 5 @ 100 cannot cross (100 < 101) => reject, no trades, book unchanged.
+    """
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
+
+    e.submit(_pl_limit("a1", Side.SELL, 101, 10, 1))
+    assert e.book.best_ask() == 101
+
+    ev = e.submit(_pl_limit("fok1", Side.BUY, 100, 5, 2, tif=TimeInForce.FOK))
+    assert len(ev) == 1
+    assert isinstance(ev[0], OrderRejected)
+    assert "fok" in ev[0].reason.lower() or "fill" in ev[0].reason.lower()
+
+    # book unchanged
+    assert e.book.best_ask() == 101
+    assert e.book.best_bid() is None
+
+
+def test_post_only_rejects_if_crossing_even_if_crossing_would_take_multiple_levels() -> (
+    None
+):
+    """
+    Setup asks:
+      a1: 1 @ 100
+      a2: 1 @ 101
+    Post-only buy 2 @ 200 would cross => reject, no trades, book unchanged.
+    """
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
+
+    e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
+    e.submit(_pl_limit("a2", Side.SELL, 101, 1, 2))
+
+    ev = e.submit(_pl_limit("po1", Side.BUY, 200, 2, 3, post_only=True))
+    assert len(ev) == 1
+    assert isinstance(ev[0], OrderRejected)
+
+    # no trades happened, makers remain
+    assert e.book.best_ask() == 100
+
+
+def test_duplicate_order_id_rejected_for_market_orders() -> None:
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
+
+    ev1 = e.submit(_pl_mkt("m1", Side.BUY, 1, 1))
+    # depending on your semantics, might expire immediately; still should create a record
+    assert "OrderRejected" not in _types(ev1)
+
+    ev2 = e.submit(_pl_mkt("m1", Side.BUY, 1, 2))
+    assert len(ev2) == 1
+    assert isinstance(ev2[0], OrderRejected)
+    assert "duplicate" in ev2[0].reason.lower()
+
+
+def test_qty_must_be_positive_for_market_and_limit() -> None:
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
+
+    ev1 = e.submit(_pl_mkt("m1", Side.BUY, 0, 1))
+    assert len(ev1) == 1
+    assert isinstance(ev1[0], OrderRejected)
+
+    ev2 = e.submit(_pl_limit("l1", Side.BUY, 100, 0, 2))
+    assert len(ev2) == 1
+    assert isinstance(ev2[0], OrderRejected)
