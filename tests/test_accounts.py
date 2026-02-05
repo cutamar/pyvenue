@@ -13,6 +13,7 @@ from pyvenue.domain.types import (
     TimeInForce,
 )
 from pyvenue.engine.engine import Engine
+from utils import NextMeta
 
 INSTR = Instrument("BTC-USD")
 BASE = Asset("BTC")
@@ -28,7 +29,7 @@ def _engine_with_balances(balances: dict[str, dict[str, int]]) -> Engine:
     balances example:
       {"alice": {"USD": 10_000, "BTC": 0}, "bob": {"USD": 0, "BTC": 5}}
     """
-    e = Engine(instrument=INSTR)
+    e = Engine(instrument=INSTR, next_meta=NextMeta())
 
     # Test-driven expectation: you provide a clean API to seed balances.
     # Recommended: e.state.ledger.credit(account, asset, amount)

@@ -16,7 +16,7 @@ from pyvenue.domain.events import (
     TopOfBookChanged,
     TradeOccurred,
 )
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Asset, Instrument, OrderId, Price, Qty, Side
 
 logger = get_logger()
 
@@ -48,6 +48,15 @@ class EngineState:
 
     def _log_state(self) -> None:
         logger.debug("Engine state", orders=self.orders)
+
+    def available(self, account: AccountId, asset: Asset) -> int:
+        return 0
+
+    def held(self, account: AccountId, asset: Asset) -> int:
+        return 0
+
+    def credit(self, account: AccountId, asset: Asset, amount: int) -> None:
+        pass
 
     def apply_all(self, events: list[Event]) -> None:
         for e in events:

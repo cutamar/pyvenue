@@ -6,6 +6,8 @@ from typing import NewType
 
 OrderId = NewType("OrderId", str)
 Instrument = NewType("Instrument", str)
+AccountId = NewType("AccountId", str)
+Asset = NewType("Asset", str)
 
 
 class Side(str, Enum):

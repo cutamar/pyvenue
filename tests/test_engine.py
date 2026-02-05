@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 from pyvenue.engine.state import EngineState
 from utils import FixedClock, NextMeta
@@ -11,6 +11,7 @@ def test_determinism_same_commands_same_events():
     cmds = [
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
             order_id=OrderId("o1"),
             side=Side.BUY,
             price=Price(100),
@@ -18,7 +19,10 @@ def test_determinism_same_commands_same_events():
             client_ts_ns=1,
         ),
         Cancel(
-            instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2
+            instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
+            order_id=OrderId("o1"),
+            client_ts_ns=2,
         ),
     ]
 
@@ -39,6 +43,7 @@ def test_replay_events_rebuilds_same_state():
     engine.submit(
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
             order_id=OrderId("o1"),
             side=Side.SELL,
             price=Price(200),
@@ -47,7 +52,12 @@ def test_replay_events_rebuilds_same_state():
         )
     )
     engine.submit(
-        Cancel(instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2)
+        Cancel(
+            instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
+            order_id=OrderId("o1"),
+            client_ts_ns=2,
+        )
     )
 
     events = engine.log.all()
@@ -71,6 +81,7 @@ def test_reject_duplicate_order_id():
     engine.submit(
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
             order_id=OrderId("o1"),
             side=Side.BUY,
             price=Price(100),
@@ -81,6 +92,7 @@ def test_reject_duplicate_order_id():
     events = engine.submit(
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
             order_id=OrderId("o1"),
             side=Side.BUY,
             price=Price(101),
@@ -96,6 +108,7 @@ def test_reject_instrument_mismatch():
     events = engine.submit(
         PlaceLimit(
             instrument=Instrument("ETH-USD"),
+            account_id=AccountId("alice"),
             order_id=OrderId("o2"),
             side=Side.BUY,
             price=Price(100),

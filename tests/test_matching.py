@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.events import Event
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 from utils import FixedClock, NextMeta
 
@@ -51,6 +51,7 @@ def place(
     return engine.submit(
         PlaceLimit(
             instrument=INSTR,
+            account_id=AccountId("alice"),
             order_id=OrderId(oid),
             side=side,
             price=Price(price),
@@ -64,6 +65,7 @@ def cancel(engine: Engine, *, oid: str, client_ts_ns: int) -> list[Event]:
     return engine.submit(
         Cancel(
             instrument=INSTR,
+            account_id=AccountId("alice"),
             order_id=OrderId(oid),
             client_ts_ns=client_ts_ns,
         )

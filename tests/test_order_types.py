@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from pyvenue.domain.commands import Cancel, PlaceLimit, PlaceMarket
 from pyvenue.domain.events import Event, OrderExpired, OrderRejected, TradeOccurred
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side, TimeInForce
+from pyvenue.domain.types import (
+    AccountId,
+    Instrument,
+    OrderId,
+    Price,
+    Qty,
+    Side,
+    TimeInForce,
+)
 from pyvenue.engine.engine import Engine
 from utils import NextMeta
 
@@ -20,6 +28,7 @@ def _pl_limit(
 ) -> PlaceLimit:
     return PlaceLimit(
         instrument=INSTR,
+        account_id=AccountId("alice"),
         order_id=OrderId(oid),
         side=side,
         price=Price(price),
@@ -38,6 +47,7 @@ def _pl_mkt(
 ) -> PlaceMarket:
     return PlaceMarket(
         instrument=INSTR,
+        account_id=AccountId("alice"),
         order_id=OrderId(oid),
         side=side,
         qty=Qty(qty),
@@ -46,7 +56,12 @@ def _pl_mkt(
 
 
 def _cx(oid: str, client_ts_ns: int) -> Cancel:
-    return Cancel(instrument=INSTR, order_id=OrderId(oid), client_ts_ns=client_ts_ns)
+    return Cancel(
+        instrument=INSTR,
+        account_id=AccountId("alice"),
+        order_id=OrderId(oid),
+        client_ts_ns=client_ts_ns,
+    )
 
 
 def _types(events: list[Event]) -> list[str]:

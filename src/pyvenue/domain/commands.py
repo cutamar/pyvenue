@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side, TimeInForce
+from pyvenue.domain.types import (
+    AccountId,
+    Instrument,
+    OrderId,
+    Price,
+    Qty,
+    Side,
+    TimeInForce,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlaceLimit:
     instrument: Instrument
+    account_id: AccountId
     order_id: OrderId
     side: Side
     price: Price
@@ -20,6 +29,7 @@ class PlaceLimit:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Cancel:
     instrument: Instrument
+    account_id: AccountId
     order_id: OrderId
     client_ts_ns: int
 
@@ -27,6 +37,7 @@ class Cancel:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlaceMarket:
     instrument: Instrument
+    account_id: AccountId
     order_id: OrderId
     side: Side
     qty: Qty

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine import Engine
 
 
@@ -10,6 +10,7 @@ def main() -> None:
     cmds = [
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
             order_id=OrderId("o1"),
             side=Side.BUY,
             price=Price(100),
@@ -17,7 +18,10 @@ def main() -> None:
             client_ts_ns=1,
         ),
         Cancel(
-            instrument=Instrument("BTC-USD"), order_id=OrderId("o1"), client_ts_ns=2
+            instrument=Instrument("BTC-USD"),
+            account_id=AccountId("alice"),
+            order_id=OrderId("o1"),
+            client_ts_ns=2,
         ),
     ]
     for cmd in cmds:

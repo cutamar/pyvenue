@@ -4,7 +4,7 @@ import pytest
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.events import Event, OrderRejected, TopOfBookChanged, TradeOccurred
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.venue import Venue
 
 BTC = Instrument("BTC-USD")
@@ -16,6 +16,7 @@ def _pl(
 ) -> PlaceLimit:
     return PlaceLimit(
         instrument=inst,
+        account_id=AccountId("alice"),
         order_id=OrderId(oid),
         side=side,
         price=Price(price),
@@ -27,6 +28,7 @@ def _pl(
 def _cx(inst: Instrument, oid: str, client_ts_ns: int) -> Cancel:
     return Cancel(
         instrument=inst,
+        account_id=AccountId("alice"),
         order_id=OrderId(oid),
         client_ts_ns=client_ts_ns,
     )
