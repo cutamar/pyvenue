@@ -42,21 +42,26 @@ class OrderRecord:
 @dataclass(slots=True)
 class EngineState:
     orders: dict[OrderId, OrderRecord]
+    accounts: dict[AccountId, dict[Asset, int]]
+    accounts_held: dict[AccountId, dict[Asset, int]]
 
     def __init__(self) -> None:
         self.orders = {}
+        self.accounts = {}
 
     def _log_state(self) -> None:
         logger.debug("Engine state", orders=self.orders)
 
     def available(self, account: AccountId, asset: Asset) -> int:
-        return 0
+        return self.accounts[account][asset]
 
     def held(self, account: AccountId, asset: Asset) -> int:
-        return 0
+        return self.accounts_held[account][asset]
 
     def credit(self, account: AccountId, asset: Asset, amount: int) -> None:
-        pass
+        if account not in self.accounts:
+            self.accounts[account] = {}
+        self.accounts[account][asset] = amount
 
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
