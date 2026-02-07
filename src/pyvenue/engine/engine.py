@@ -18,7 +18,15 @@ from pyvenue.domain.events import (
     TopOfBookChanged,
     TradeOccurred,
 )
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side, TimeInForce
+from pyvenue.domain.types import (
+    Asset,
+    Instrument,
+    OrderId,
+    Price,
+    Qty,
+    Side,
+    TimeInForce,
+)
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderStatus
 from pyvenue.infra import EventLog
@@ -56,6 +64,10 @@ class Engine:
             order_id=order_id,
             reason=reason,
         )
+
+    def resolve_assets(self, instrument: Instrument):
+        base, quote = instrument.split("-")
+        return Asset(base), Asset(quote)
 
     def submit(self, command: Command) -> list[Event]:
         self.logger.debug("Submitting command", command=command)
@@ -184,6 +196,7 @@ class Engine:
     @handle.register
     def _(self, command: PlaceLimit) -> list[Event]:
         self.logger.debug("Handling PlaceLimit command", command=command)
+        base_asset, _ = self.resolve_assets(command.instrument)
         if command.qty.lots <= 0:
             self.logger.warning(
                 "PlaceLimit command rejected: qty must be > 0", command=command
@@ -204,6 +217,15 @@ class Engine:
             )
             events = [
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
+            ]
+        elif command.price.ticks * command.qty.lots > self.state.available(
+            command.account_id, base_asset
+        ):
+            self.logger.warning(
+                "PlaceLimit command rejected: insufficient funds", command=command
+            )
+            events = [
+                self._reject(command.instrument, command.order_id, "insufficient funds")
             ]
         else:
             if command.post_only:
