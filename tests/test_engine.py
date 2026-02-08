@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
-from pyvenue.engine.engine import Engine
 from pyvenue.engine.state import EngineState
-from utils import FixedClock, NextMeta
+from utils import FixedClock, NextMeta, engine_with_balances
 
 
 def test_determinism_same_commands_same_events():
@@ -26,8 +25,16 @@ def test_determinism_same_commands_same_events():
         ),
     ]
 
-    e1 = Engine(instrument=Instrument("BTC-USD"), next_meta=NextMeta(FixedClock(999)))
-    e2 = Engine(instrument=Instrument("BTC-USD"), next_meta=NextMeta(FixedClock(999)))
+    e1 = engine_with_balances(
+        Instrument("BTC-USD"),
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(999)),
+    )
+    e2 = engine_with_balances(
+        Instrument("BTC-USD"),
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(999)),
+    )
 
     out1 = [ev for c in cmds for ev in e1.submit(c)]
     out2 = [ev for c in cmds for ev in e2.submit(c)]
@@ -37,8 +44,10 @@ def test_determinism_same_commands_same_events():
 
 
 def test_replay_events_rebuilds_same_state():
-    engine = Engine(
-        instrument=Instrument("BTC-USD"), next_meta=NextMeta(FixedClock(111))
+    engine = engine_with_balances(
+        Instrument("BTC-USD"),
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(111)),
     )
     engine.submit(
         PlaceLimit(
@@ -77,7 +86,11 @@ def test_replay_events_rebuilds_same_state():
 
 
 def test_reject_duplicate_order_id():
-    engine = Engine(instrument=Instrument("BTC-USD"), next_meta=NextMeta(FixedClock(1)))
+    engine = engine_with_balances(
+        Instrument("BTC-USD"),
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
     engine.submit(
         PlaceLimit(
             instrument=Instrument("BTC-USD"),
@@ -104,7 +117,11 @@ def test_reject_duplicate_order_id():
 
 
 def test_reject_instrument_mismatch():
-    engine = Engine(instrument=Instrument("BTC-USD"), next_meta=NextMeta(FixedClock(1)))
+    engine = engine_with_balances(
+        Instrument("BTC-USD"),
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
     events = engine.submit(
         PlaceLimit(
             instrument=Instrument("ETH-USD"),

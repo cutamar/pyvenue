@@ -48,6 +48,7 @@ class EngineState:
     def __init__(self) -> None:
         self.orders = {}
         self.accounts = {}
+        self.accounts_held = {}
 
     def _log_state(self) -> None:
         logger.debug("Engine state", orders=self.orders)
@@ -62,6 +63,9 @@ class EngineState:
         if account not in self.accounts:
             self.accounts[account] = {}
         self.accounts[account][asset] = amount
+        if account not in self.accounts_held:
+            self.accounts_held[account] = {}
+        self.accounts_held[account][asset] = 0
 
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
