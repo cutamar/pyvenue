@@ -11,8 +11,7 @@ from pyvenue.domain.types import (
     Side,
     TimeInForce,
 )
-from pyvenue.engine.engine import Engine
-from utils import NextMeta
+from utils import engine_with_balances
 
 INSTR = Instrument("BTC-USD")
 
@@ -87,7 +86,10 @@ def test_market_buy_sweeps_multiple_levels_and_never_rests() -> None:
       a2: 3 @ 105
     Market buy 4 => fills 2@100 and 2@105, leaves 1@105 resting.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
     e.submit(_pl_limit("a2", Side.SELL, 105, 3, 2))
@@ -118,7 +120,10 @@ def test_market_buy_on_empty_book_expires_or_rejects() -> None:
     We expect: accepted + expired OR rejected (choose one).
     This test is written for "accepted then expired".
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     ev = e.submit(_pl_mkt("mb1", Side.BUY, 5, 1))
     names = _types(ev)
@@ -138,7 +143,10 @@ def test_ioc_limit_crosses_then_expires_remainder_and_does_not_rest() -> None:
     Setup ask a1: 2@100
     IOC buy 5@100 => trades 2 and expires remainder 3. Should NOT rest bid.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
 
@@ -168,7 +176,10 @@ def test_ioc_limit_that_does_not_cross_expires_entire_order_and_does_not_rest() 
     Setup ask a1: 1@100
     IOC buy 1@90 => no crossing => expires, does NOT rest.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
     assert e.book.best_ask() == 100
@@ -191,7 +202,10 @@ def test_fok_limit_rejects_if_not_fully_fillable_and_does_not_mutate_book() -> N
       a2: 2@100
     FOK buy 4@100 => not fillable => reject, no trades, book unchanged.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
     e.submit(_pl_limit("a2", Side.SELL, 100, 2, 2))
@@ -218,7 +232,10 @@ def test_fok_limit_fills_fully_and_does_not_rest() -> None:
       a2: 3@100
     FOK buy 5@100 => fully fills, no rest for taker.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
     e.submit(_pl_limit("a2", Side.SELL, 100, 3, 2))
@@ -236,7 +253,10 @@ def test_post_only_rejects_if_it_would_cross_and_does_not_trade() -> None:
     Post-only buy 1@100 would cross => must reject (or cancel), and no trade occurs.
     This test expects REJECT.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
 
     ev = e.submit(
@@ -255,7 +275,10 @@ def test_post_only_rest_if_it_does_not_cross() -> None:
     Setup ask a1: 1@100
     Post-only buy 1@90 does not cross => should rest as bid at 90.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
 
     ev = e.submit(
@@ -277,7 +300,10 @@ def test_market_sell_partially_fills_then_expires_remainder_and_consumes_bids() 
       b1: 2 @ 100
     Market sell 5 => fills 2@100, expires remaining 3, leaves book empty.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("b1", Side.BUY, 100, 2, 1))
 
@@ -300,7 +326,10 @@ def test_ioc_limit_partial_fill_expires_only_the_remainder() -> None:
       a2: 10 @ 110
     IOC buy 5 @ 100 => fills 2@100, remainder 3 expires (does not rest)
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
     e.submit(_pl_limit("a2", Side.SELL, 110, 10, 2))
@@ -325,7 +354,10 @@ def test_fok_limit_not_fillable_due_to_price_constraint_rejects_without_mutation
       a1: 10 @ 101
     FOK buy 5 @ 100 cannot cross (100 < 101) => reject, no trades, book unchanged.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 101, 10, 1))
     assert e.book.best_ask() == 101
@@ -349,7 +381,10 @@ def test_post_only_rejects_if_crossing_even_if_crossing_would_take_multiple_leve
       a2: 1 @ 101
     Post-only buy 2 @ 200 would cross => reject, no trades, book unchanged.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
     e.submit(_pl_limit("a2", Side.SELL, 101, 1, 2))
@@ -363,7 +398,10 @@ def test_post_only_rejects_if_crossing_even_if_crossing_would_take_multiple_leve
 
 
 def test_duplicate_order_id_rejected_for_market_orders() -> None:
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     ev1 = e.submit(_pl_mkt("m1", Side.BUY, 1, 1))
     # depending on your semantics, might expire immediately; still should create a record
@@ -376,7 +414,10 @@ def test_duplicate_order_id_rejected_for_market_orders() -> None:
 
 
 def test_qty_must_be_positive_for_market_and_limit() -> None:
-    e = Engine(instrument=INSTR, next_meta=NextMeta())
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     ev1 = e.submit(_pl_mkt("m1", Side.BUY, 0, 1))
     assert len(ev1) == 1

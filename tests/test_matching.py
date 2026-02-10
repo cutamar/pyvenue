@@ -6,7 +6,7 @@ from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.events import Event
 from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
-from utils import FixedClock, NextMeta
+from utils import FixedClock, NextMeta, engine_with_balances
 
 # ----------------------------
 # Test helpers
@@ -78,7 +78,11 @@ def test_single_match_full_fill_trade_at_maker_price():
     Incoming buy: b1 5 @ 110
     Expect: trade 5 @ 100 (maker price)
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(1)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     ev1 = place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
     assert types(ev1) == ["OrderAccepted", "OrderRested", "TopOfBookChanged"]
@@ -94,7 +98,11 @@ def test_partial_fill_resting_order_keeps_remaining():
     Incoming buy: b1 4 @ 100 -> fills 4, leaves 6 on a1
     Incoming buy: b2 6 @ 100 -> fills remaining 6 on a1
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(1)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     place(e, oid="a1", side=Side.SELL, price=100, qty=10, client_ts_ns=1)
 
@@ -123,7 +131,11 @@ def test_sweep_multiple_price_levels_and_leave_remainder():
 
     Then another buy b2 2 @ 999 should fill the remaining 2 @ 102 from a3.
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(1)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     place(e, oid="a1", side=Side.SELL, price=100, qty=3, client_ts_ns=1)
     place(e, oid="a2", side=Side.SELL, price=101, qty=4, client_ts_ns=2)
@@ -161,7 +173,11 @@ def test_fifo_within_price_level():
       fill a1 for 3
       then a2 for 1
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(1)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     place(e, oid="a1", side=Side.SELL, price=100, qty=3, client_ts_ns=1)
     place(e, oid="a2", side=Side.SELL, price=100, qty=3, client_ts_ns=2)
@@ -181,7 +197,11 @@ def test_no_cross_order_rests_and_can_trade_later():
     Place buy at 99 -> no trade (should rest as best bid at 99).
     Then place sell at 99 -> should trade against resting buy at 99, price=99 (maker price).
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(1)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
 
@@ -202,7 +222,11 @@ def test_cancel_prevents_fill():
     Cancel a1
     Place buy b1 5@100 -> should NOT trade with a1
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(1)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
 
@@ -219,7 +243,11 @@ def test_sequence_numbers_are_monotonic():
     Basic sanity: seq should increase by 1 for each emitted event.
     (We don't care about timestamps yet; FixedClock returns a constant.)
     """
-    e = Engine(instrument=INSTR, next_meta=NextMeta(FixedClock(123)))
+    e = engine_with_balances(
+        INSTR,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+        next_meta=NextMeta(FixedClock(1)),
+    )
 
     events: list[Event] = []
     events += place(e, oid="a1", side=Side.SELL, price=100, qty=2, client_ts_ns=1)  # 1
