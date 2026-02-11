@@ -5,7 +5,7 @@ from pyvenue.domain.events import Event
 from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.engine import Engine
 from pyvenue.engine.state import OrderRecord, OrderStatus
-from utils import NextMeta
+from utils import NextMeta, engine_with_balances
 
 
 def _pl(
@@ -53,7 +53,10 @@ def _snapshot(engine: Engine) -> dict[OrderId, tuple[OrderStatus, int]]:
 
 def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     # Maker rests: sell 5 @ 100
     e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1))
@@ -83,7 +86,10 @@ def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
 
 def test_replay_reconstructs_same_state() -> None:
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     all_events = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
@@ -107,7 +113,10 @@ def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
     - cancel works for resting orders after replay
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     all_events: list[Event] = []
     # Resting ask m1: 5@100
@@ -142,7 +151,10 @@ def test_replay_book_allows_matching_after_replay() -> None:
     Place a new crossing order and ensure a trade occurs against the resting maker.
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     all_events: list[Event] = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 3, 1)))  # maker rests
@@ -173,7 +185,10 @@ def test_replay_book_applies_trade_occurred_to_maker_remaining() -> None:
     maker remaining decreases (and the order stays resting if remaining > 0).
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     all_events: list[Event] = []
     # maker rests 5@100
@@ -198,7 +213,10 @@ def test_replay_book_trade_fully_filled_maker_is_not_cancelable() -> None:
     fully filled maker order is removed and is no longer cancelable.
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     all_events: list[Event] = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 2, 1)))
@@ -219,7 +237,10 @@ def test_replay_book_applies_order_canceled_removes_resting_order() -> None:
     canceled resting order is removed and is no longer cancelable.
     """
     inst = Instrument("BTC-USD")
-    e = Engine(instrument=inst, next_meta=NextMeta())
+    e = engine_with_balances(
+        inst,
+        {"alice": {"USD": 999999, "BTC": 999999}},
+    )
 
     all_events: list[Event] = []
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
