@@ -161,7 +161,11 @@ def test_replay_book_allows_matching_after_replay() -> None:
 
     # Replay into new engine with rebuilt book
     r = Engine.replay(
-        instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
+        instrument=inst,
+        events=all_events,
+        next_meta=NextMeta(),
+        rebuild_book=True,
+        balances=e.state.accounts,
     )
 
     # Now cross it with a taker buy

@@ -19,6 +19,7 @@ from pyvenue.domain.events import (
     TradeOccurred,
 )
 from pyvenue.domain.types import (
+    AccountId,
     Asset,
     Instrument,
     OrderId,
@@ -106,8 +107,13 @@ class Engine:
         events: list[Event],
         next_meta: Callable[[], tuple[int, int]],
         rebuild_book: bool = False,
+        balances: dict[AccountId, dict[Asset, int]] | None = None,
     ) -> Engine:
         engine = cls(instrument=instrument, next_meta=next_meta)
+        if balances is not None:
+            for acct, assets in balances.items():
+                for asset, amt in assets.items():
+                    engine.state.credit(acct, asset, amt)
         for e in events:
             if e.instrument == instrument:
                 engine.log.append(e)
