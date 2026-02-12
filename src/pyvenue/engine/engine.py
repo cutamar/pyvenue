@@ -202,7 +202,8 @@ class Engine:
     @handle.register
     def _(self, command: PlaceLimit) -> list[Event]:
         self.logger.debug("Handling PlaceLimit command", command=command)
-        base_asset, _ = self.resolve_assets(command.instrument)
+        base_asset, quote_asset = self.resolve_assets(command.instrument)
+        asset = base_asset if command.side == Side.SELL else quote_asset
         if command.qty.lots <= 0:
             self.logger.warning(
                 "PlaceLimit command rejected: qty must be > 0", command=command
@@ -225,7 +226,7 @@ class Engine:
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
         elif command.price.ticks * command.qty.lots > self.state.available(
-            command.account_id, base_asset
+            command.account_id, asset
         ):
             self.logger.warning(
                 "PlaceLimit command rejected: insufficient funds", command=command
