@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pyvenue.domain.types import AccountId, Asset, Instrument
 from pyvenue.engine.engine import Engine
 from pyvenue.infra.clock import Clock
+from pyvenue.venue import Venue
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,3 +46,14 @@ def engine_with_balances(
             e.state.credit(AccountId(acct), Asset(asset), amt)
 
     return e
+
+
+def venue_with_balances(
+    instruments: list[Instrument], balances: dict[str, dict[str, dict[str, int]]]
+) -> Venue:
+    v = Venue(instruments=instruments)
+    for instrument, instrument_balances in balances.items():
+        for acct, assets in instrument_balances.items():
+            for asset, amt in assets.items():
+                v.credit(Instrument(instrument), AccountId(acct), Asset(asset), amt)
+    return v

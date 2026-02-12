@@ -6,6 +6,7 @@ from pyvenue.domain.commands import Cancel, PlaceLimit
 from pyvenue.domain.events import Event, OrderRejected, TopOfBookChanged, TradeOccurred
 from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.venue import Venue
+from utils import venue_with_balances
 
 BTC = Instrument("BTC-USD")
 ETH = Instrument("ETH-USD")
@@ -51,7 +52,13 @@ def _max_seq(events: list[Event]) -> int:
 
 
 def test_routes_to_correct_instrument_and_isolates_books() -> None:
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     # Place a BTC bid; should not affect ETH
     ev_btc = v.submit(_pl(BTC, "b1", Side.BUY, 100, 1, 1))
@@ -75,7 +82,12 @@ def test_routes_to_correct_instrument_and_isolates_books() -> None:
 
 
 def test_unknown_instrument_rejected() -> None:
-    v = Venue(instruments=[BTC])
+    v = venue_with_balances(
+        [BTC],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+        },
+    )
 
     ev = v.submit(_pl(ETH, "x1", Side.BUY, 1, 1, 1))
     assert len(ev) == 1
@@ -88,7 +100,13 @@ def test_global_seq_monotonic_across_instruments() -> None:
     Milestone 4 design choice: Venue is the sequencing authority.
     Events emitted for ETH after BTC must have larger seq numbers.
     """
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     ev1 = v.submit(_pl(BTC, "b1", Side.BUY, 100, 1, 1))
     s1 = _max_seq(ev1)
@@ -100,7 +118,13 @@ def test_global_seq_monotonic_across_instruments() -> None:
 
 
 def test_trade_occurs_only_within_same_instrument() -> None:
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     # Rest BTC ask
     v.submit(_pl(BTC, "a1", Side.SELL, 100, 2, 1))
@@ -127,7 +151,13 @@ def test_replay_reconstructs_multiple_books() -> None:
       Venue.replay(instruments=[...], events=[...], rebuild_books=True)
     and the replay rebuild is usable (cancel works, matching works).
     """
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     all_events: list[Event] = []
 
@@ -156,7 +186,13 @@ def test_replay_reconstructs_multiple_books() -> None:
 
 
 def test_cancel_routes_to_correct_instrument_only() -> None:
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     # Same order_id on both instruments (should be allowed)
     v.submit(_pl(BTC, "o1", Side.BUY, 100, 1, 1))
@@ -178,7 +214,13 @@ def test_order_ids_can_collide_across_instruments() -> None:
     Routing should namespace order_id by instrument.
     Same order_id should be valid on different books.
     """
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     ev1 = v.submit(_pl(BTC, "dup", Side.BUY, 100, 1, 1))
     ev2 = v.submit(_pl(ETH, "dup", Side.SELL, 200, 1, 2))
@@ -195,7 +237,13 @@ def test_cancel_unknown_order_rejected_per_instrument() -> None:
     Cancel should be evaluated in the target instrument namespace,
     not globally.
     """
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     # Place on BTC only
     v.submit(_pl(BTC, "o1", Side.BUY, 100, 1, 1))
@@ -213,7 +261,13 @@ def test_replay_rejects_events_for_unconfigured_instrument() -> None:
     in the event stream, replay should fail loudly (or you can choose to ignore,
     but then adjust this test).
     """
-    v = Venue(instruments=[BTC, ETH])
+    v = venue_with_balances(
+        [BTC, ETH],
+        {
+            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
+            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+        },
+    )
 
     events: list[Event] = []
     events.extend(v.submit(_pl(BTC, "b1", Side.BUY, 100, 1, 1)))
