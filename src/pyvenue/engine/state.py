@@ -67,6 +67,34 @@ class EngineState:
             self.accounts_held[account] = {}
         self.accounts_held[account][asset] = 0
 
+    def reserve(self, account: AccountId, asset: Asset, amount: int) -> None:
+        if account not in self.accounts:
+            raise ValueError(f"Account {account!r} not found")
+        if asset not in self.accounts[account]:
+            raise ValueError(f"Asset {asset!r} not found for account {account!r}")
+        if self.accounts[account][asset] < amount:
+            raise ValueError(f"Insufficient funds for account {account!r}")
+        self.accounts[account][asset] -= amount
+        if account not in self.accounts_held:
+            self.accounts_held[account] = {}
+        if asset not in self.accounts_held[account]:
+            self.accounts_held[account][asset] = 0
+        self.accounts_held[account][asset] += amount
+
+    def release(self, account: AccountId, asset: Asset, amount: int) -> None:
+        if account not in self.accounts_held:
+            raise ValueError(f"Account {account!r} not found")
+        if asset not in self.accounts_held[account]:
+            raise ValueError(f"Asset {asset!r} not found for account {account!r}")
+        if self.accounts_held[account][asset] < amount:
+            raise ValueError(f"Insufficient held funds for account {account!r}")
+        self.accounts_held[account][asset] -= amount
+        if account not in self.accounts:
+            raise ValueError(f"Account {account!r} not found")
+        if asset not in self.accounts[account]:
+            raise ValueError(f"Asset {asset!r} not found for account {account!r}")
+        self.accounts[account][asset] += amount
+
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
             self.apply(e)

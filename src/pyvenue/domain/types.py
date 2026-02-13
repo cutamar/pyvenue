@@ -14,6 +14,11 @@ class Side(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
 
+    def opposite(self) -> Side:
+        if self == Side.BUY:
+            return Side.SELL
+        return Side.BUY
+
 
 @dataclass(frozen=True, slots=True)
 class Price:

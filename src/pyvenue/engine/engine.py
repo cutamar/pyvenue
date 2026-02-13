@@ -68,7 +68,7 @@ class Engine:
 
     def resolve_assets(self, instrument: Instrument):
         base, quote = instrument.split("-")
-        return Asset(base), Asset(quote)
+        return {Side.SELL: Asset(base), Side.BUY: Asset(quote)}
 
     def submit(self, command: Command) -> list[Event]:
         self.logger.debug("Submitting command", command=command)
@@ -202,8 +202,7 @@ class Engine:
     @handle.register
     def _(self, command: PlaceLimit) -> list[Event]:
         self.logger.debug("Handling PlaceLimit command", command=command)
-        base_asset, quote_asset = self.resolve_assets(command.instrument)
-        asset = base_asset if command.side == Side.SELL else quote_asset
+        asset = self.resolve_assets(command.instrument)[command.side]
         if command.qty.lots <= 0:
             self.logger.warning(
                 "PlaceLimit command rejected: qty must be > 0", command=command
@@ -308,9 +307,15 @@ class Engine:
                         price=fill_event.maker_price,
                     )
                 )
+
             if remaining > 0:
                 seq, ts = self.next_meta()
                 if command.tif == TimeInForce.GTC:
+                    self.state.reserve(
+                        command.account_id,
+                        self.resolve_assets(command.instrument)[command.side],
+                        command.qty.lots * command.price.ticks,
+                    )
                     events.append(
                         OrderRested(
                             seq=seq,
@@ -366,6 +371,12 @@ class Engine:
                 )
             ]
 
+        asset = self.resolve_assets(record.instrument)[record.side]
+        self.state.release(
+            command.account_id,
+            asset,
+            record.qty.lots * record.price.ticks,
+        )
         seq, ts = self.next_meta()
         self.logger.debug("Cancel seq and ts", seq=seq, ts=ts)
         return [
