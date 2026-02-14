@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from pyvenue.domain.commands import Command
 from pyvenue.domain.events import Event, OrderRejected
-from pyvenue.domain.types import AccountId, Asset, Instrument
+from pyvenue.domain.types import Instrument
 from pyvenue.engine.engine import Engine
 from pyvenue.infra import Clock, SystemClock
 
@@ -21,11 +21,6 @@ class Venue:
     def _next_meta(self) -> tuple[int, int]:
         self.seq += 1
         return self.seq, self.clock.now_ns()
-
-    def credit(
-        self, instrument: Instrument, account: AccountId, asset: Asset, amount: int
-    ) -> None:
-        self.engines[instrument].state.credit(account, asset, amount)
 
     def submit(self, command: Command) -> list[Event]:
         events: list[Event] = []

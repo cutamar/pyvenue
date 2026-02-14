@@ -10,6 +10,8 @@ import structlog
 from pyvenue.domain.commands import Cancel, Command, PlaceLimit, PlaceMarket
 from pyvenue.domain.events import (
     Event,
+    FundsReleased,
+    FundsReserved,
     OrderAccepted,
     OrderCanceled,
     OrderExpired,
@@ -19,7 +21,6 @@ from pyvenue.domain.events import (
     TradeOccurred,
 )
 from pyvenue.domain.types import (
-    AccountId,
     Asset,
     Instrument,
     OrderId,
@@ -107,13 +108,8 @@ class Engine:
         events: list[Event],
         next_meta: Callable[[], tuple[int, int]],
         rebuild_book: bool = False,
-        balances: dict[AccountId, dict[Asset, int]] | None = None,
     ) -> Engine:
         engine = cls(instrument=instrument, next_meta=next_meta)
-        if balances is not None:
-            for acct, assets in balances.items():
-                for asset, amt in assets.items():
-                    engine.state.credit(acct, asset, amt)
         for e in events:
             if e.instrument == instrument:
                 engine.log.append(e)
@@ -309,13 +305,19 @@ class Engine:
                 )
 
             if remaining > 0:
-                seq, ts = self.next_meta()
                 if command.tif == TimeInForce.GTC:
-                    self.state.reserve(
-                        command.account_id,
-                        self.resolve_assets(command.instrument)[command.side],
-                        command.qty.lots * command.price.ticks,
+                    seq, ts = self.next_meta()
+                    events.append(
+                        FundsReserved(
+                            seq=seq,
+                            ts_ns=ts,
+                            instrument=command.instrument,
+                            account_id=command.account_id,
+                            asset=self.resolve_assets(command.instrument)[command.side],
+                            amount=Price(command.qty.lots * command.price.ticks),
+                        )
                     )
+                    seq, ts = self.next_meta()
                     events.append(
                         OrderRested(
                             seq=seq,
@@ -328,6 +330,7 @@ class Engine:
                         )
                     )
                 elif command.tif == TimeInForce.IOC:
+                    seq, ts = self.next_meta()
                     events.append(
                         OrderExpired(
                             seq=seq,
@@ -372,18 +375,26 @@ class Engine:
             ]
 
         asset = self.resolve_assets(record.instrument)[record.side]
-        self.state.release(
-            command.account_id,
-            asset,
-            record.qty.lots * record.price.ticks,
+        events = []
+        seq, ts = self.next_meta()
+        events.append(
+            FundsReleased(
+                seq=seq,
+                ts_ns=ts,
+                instrument=command.instrument,
+                account_id=command.account_id,
+                asset=asset,
+                amount=Price(record.qty.lots * record.price.ticks),
+            )
         )
         seq, ts = self.next_meta()
         self.logger.debug("Cancel seq and ts", seq=seq, ts=ts)
-        return [
+        events.append(
             OrderCanceled(
                 seq=seq,
                 ts_ns=ts,
                 instrument=command.instrument,
                 order_id=command.order_id,
             )
-        ]
+        )
+        return events

@@ -165,7 +165,6 @@ def test_replay_book_allows_matching_after_replay() -> None:
         events=all_events,
         next_meta=NextMeta(),
         rebuild_book=True,
-        balances=e.state.accounts,
     )
 
     # Now cross it with a taker buy

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Asset, Instrument, OrderId, Price, Qty, Side
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -82,6 +82,39 @@ class OrderExpired:
     reason: str
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FundsCredited:
+    type: Literal["FundsCredited"] = field(default="FundsCredited", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    account_id: AccountId
+    asset: Asset
+    amount: Price
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FundsReserved:
+    type: Literal["FundsReserved"] = field(default="FundsReserved", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    account_id: AccountId
+    asset: Asset
+    amount: Price
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FundsReleased:
+    type: Literal["FundsReleased"] = field(default="FundsReleased", init=False)
+    seq: int
+    ts_ns: int
+    instrument: Instrument
+    account_id: AccountId
+    asset: Asset
+    amount: Price
+
+
 Event = (
     OrderAccepted
     | OrderRejected
@@ -90,4 +123,7 @@ Event = (
     | TopOfBookChanged
     | OrderRested
     | OrderExpired
+    | FundsCredited
+    | FundsReserved
+    | FundsReleased
 )

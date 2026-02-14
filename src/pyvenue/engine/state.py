@@ -8,6 +8,9 @@ from structlog import get_logger
 
 from pyvenue.domain.events import (
     Event,
+    FundsCredited,
+    FundsReleased,
+    FundsReserved,
     OrderAccepted,
     OrderCanceled,
     OrderExpired,
@@ -58,42 +61,6 @@ class EngineState:
 
     def held(self, account: AccountId, asset: Asset) -> int:
         return self.accounts_held[account][asset]
-
-    def credit(self, account: AccountId, asset: Asset, amount: int) -> None:
-        if account not in self.accounts:
-            self.accounts[account] = {}
-        self.accounts[account][asset] = amount
-        if account not in self.accounts_held:
-            self.accounts_held[account] = {}
-        self.accounts_held[account][asset] = 0
-
-    def reserve(self, account: AccountId, asset: Asset, amount: int) -> None:
-        if account not in self.accounts:
-            raise ValueError(f"Account {account!r} not found")
-        if asset not in self.accounts[account]:
-            raise ValueError(f"Asset {asset!r} not found for account {account!r}")
-        if self.accounts[account][asset] < amount:
-            raise ValueError(f"Insufficient funds for account {account!r}")
-        self.accounts[account][asset] -= amount
-        if account not in self.accounts_held:
-            self.accounts_held[account] = {}
-        if asset not in self.accounts_held[account]:
-            self.accounts_held[account][asset] = 0
-        self.accounts_held[account][asset] += amount
-
-    def release(self, account: AccountId, asset: Asset, amount: int) -> None:
-        if account not in self.accounts_held:
-            raise ValueError(f"Account {account!r} not found")
-        if asset not in self.accounts_held[account]:
-            raise ValueError(f"Asset {asset!r} not found for account {account!r}")
-        if self.accounts_held[account][asset] < amount:
-            raise ValueError(f"Insufficient held funds for account {account!r}")
-        self.accounts_held[account][asset] -= amount
-        if account not in self.accounts:
-            raise ValueError(f"Account {account!r} not found")
-        if asset not in self.accounts[account]:
-            raise ValueError(f"Asset {asset!r} not found for account {account!r}")
-        self.accounts[account][asset] += amount
 
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
@@ -158,3 +125,53 @@ class EngineState:
     @apply.register
     def _(self, event: OrderRested) -> None:
         logger.debug("Applying order rested event", trade_event=event)
+
+    @apply.register
+    def _(self, event: FundsCredited) -> None:
+        logger.debug("Applying funds credited event", trade_event=event)
+        if event.account_id not in self.accounts:
+            self.accounts[event.account_id] = {}
+        self.accounts[event.account_id][event.asset] = event.amount.ticks
+        if event.account_id not in self.accounts_held:
+            self.accounts_held[event.account_id] = {}
+        self.accounts_held[event.account_id][event.asset] = 0
+
+    @apply.register
+    def _(self, event: FundsReserved) -> None:
+        logger.debug("Applying funds reserved event", trade_event=event)
+        if event.account_id not in self.accounts:
+            raise ValueError(f"Account {event.account_id!r} not found")
+        if event.asset not in self.accounts[event.account_id]:
+            raise ValueError(
+                f"Asset {event.asset!r} not found for account {event.account_id!r}"
+            )
+        if self.accounts[event.account_id][event.asset] < event.amount.ticks:
+            raise ValueError(f"Insufficient funds for account {event.account_id!r}")
+        self.accounts[event.account_id][event.asset] -= event.amount.ticks
+        if event.account_id not in self.accounts_held:
+            self.accounts_held[event.account_id] = {}
+        if event.asset not in self.accounts_held[event.account_id]:
+            self.accounts_held[event.account_id][event.asset] = 0
+        self.accounts_held[event.account_id][event.asset] += event.amount.ticks
+
+    @apply.register
+    def _(self, event: FundsReleased) -> None:
+        logger.debug("Applying funds released event", trade_event=event)
+        if event.account_id not in self.accounts_held:
+            raise ValueError(f"Account {event.account_id!r} not found")
+        if event.asset not in self.accounts_held[event.account_id]:
+            raise ValueError(
+                f"Asset {event.asset!r} not found for account {event.account_id!r}"
+            )
+        if self.accounts_held[event.account_id][event.asset] < event.amount.ticks:
+            raise ValueError(
+                f"Insufficient held funds for account {event.account_id!r}"
+            )
+        self.accounts_held[event.account_id][event.asset] -= event.amount.ticks
+        if event.account_id not in self.accounts:
+            raise ValueError(f"Account {event.account_id!r} not found")
+        if event.asset not in self.accounts[event.account_id]:
+            raise ValueError(
+                f"Asset {event.asset!r} not found for account {event.account_id!r}"
+            )
+        self.accounts[event.account_id][event.asset] += event.amount.ticks

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from pyvenue.domain.types import AccountId, Asset, Instrument
+from pyvenue.domain.events import FundsCredited
+from pyvenue.domain.types import AccountId, Asset, Instrument, Price
 from pyvenue.engine.engine import Engine
 from pyvenue.infra.clock import Clock
 from pyvenue.venue import Venue
@@ -39,11 +40,19 @@ def engine_with_balances(
         next_meta = NextMeta()
     e = Engine(instrument=instrument, next_meta=next_meta)
 
-    # Test-driven expectation: you provide a clean API to seed balances.
-    # Recommended: e.state.ledger.credit(account, asset, amount)
     for acct, assets in balances.items():
         for asset, amt in assets.items():
-            e.state.credit(AccountId(acct), Asset(asset), amt)
+            seq, ts_ns = next_meta()
+            e.state.apply(
+                FundsCredited(
+                    seq=seq,
+                    ts_ns=ts_ns,
+                    instrument=Instrument(instrument),
+                    account_id=AccountId(acct),
+                    asset=Asset(asset),
+                    amount=Price(amt),
+                )
+            )
 
     return e
 
@@ -55,5 +64,15 @@ def venue_with_balances(
     for instrument, instrument_balances in balances.items():
         for acct, assets in instrument_balances.items():
             for asset, amt in assets.items():
-                v.credit(Instrument(instrument), AccountId(acct), Asset(asset), amt)
+                seq, ts_ns = v._next_meta()
+                v.engines[Instrument(instrument)].state.apply(
+                    FundsCredited(
+                        seq=seq,
+                        ts_ns=ts_ns,
+                        instrument=Instrument(instrument),
+                        account_id=AccountId(acct),
+                        asset=Asset(asset),
+                        amount=Price(amt),
+                    )
+                )
     return v
