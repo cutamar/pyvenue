@@ -40,7 +40,7 @@ def test_determinism_same_commands_same_events():
     out2 = [ev for c in cmds for ev in e2.submit(c)]
 
     assert out1 == out2
-    assert [ev.seq for ev in out1] == [1, 2, 3, 4, 5]
+    assert [ev.seq for ev in out1] == [1, 2, 3, 4, 5, 6, 7]
 
 
 def test_replay_events_rebuilds_same_state():

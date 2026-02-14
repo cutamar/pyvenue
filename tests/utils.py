@@ -42,17 +42,16 @@ def engine_with_balances(
 
     for acct, assets in balances.items():
         for asset, amt in assets.items():
-            seq, ts_ns = next_meta()
-            e.state.apply(
-                FundsCredited(
-                    seq=seq,
-                    ts_ns=ts_ns,
-                    instrument=Instrument(instrument),
-                    account_id=AccountId(acct),
-                    asset=Asset(asset),
-                    amount=Price(amt),
-                )
+            ev = FundsCredited(
+                seq=-1,
+                ts_ns=0,
+                instrument=Instrument(instrument),
+                account_id=AccountId(acct),
+                asset=Asset(asset),
+                amount=Price(amt),
             )
+            e.log.append(ev)
+            e.state.apply(ev)
 
     return e
 
@@ -64,15 +63,14 @@ def venue_with_balances(
     for instrument, instrument_balances in balances.items():
         for acct, assets in instrument_balances.items():
             for asset, amt in assets.items():
-                seq, ts_ns = v._next_meta()
-                v.engines[Instrument(instrument)].state.apply(
-                    FundsCredited(
-                        seq=seq,
-                        ts_ns=ts_ns,
-                        instrument=Instrument(instrument),
-                        account_id=AccountId(acct),
-                        asset=Asset(asset),
-                        amount=Price(amt),
-                    )
+                ev = FundsCredited(
+                    seq=-1,
+                    ts_ns=0,
+                    instrument=Instrument(instrument),
+                    account_id=AccountId(acct),
+                    asset=Asset(asset),
+                    amount=Price(amt),
                 )
+                v.engines[Instrument(instrument)].log.append(ev)
+                v.engines[Instrument(instrument)].state.apply(ev)
     return v

@@ -85,7 +85,12 @@ def test_single_match_full_fill_trade_at_maker_price():
     )
 
     ev1 = place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
-    assert types(ev1) == ["OrderAccepted", "OrderRested", "TopOfBookChanged"]
+    assert types(ev1) == [
+        "OrderAccepted",
+        "FundsReserved",
+        "OrderRested",
+        "TopOfBookChanged",
+    ]
 
     ev2 = place(e, oid="b1", side=Side.BUY, price=110, qty=5, client_ts_ns=2)
     assert types(ev2) == ["OrderAccepted", "TradeOccurred", "TopOfBookChanged"]
@@ -206,7 +211,12 @@ def test_no_cross_order_rests_and_can_trade_later():
     place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
 
     ev_b1 = place(e, oid="b1", side=Side.BUY, price=99, qty=1, client_ts_ns=2)
-    assert types(ev_b1) == ["OrderAccepted", "OrderRested", "TopOfBookChanged"]
+    assert types(ev_b1) == [
+        "OrderAccepted",
+        "FundsReserved",
+        "OrderRested",
+        "TopOfBookChanged",
+    ]
     assert trades(ev_b1) == []
 
     ev_s1 = place(e, oid="s1", side=Side.SELL, price=99, qty=1, client_ts_ns=3)
@@ -231,7 +241,7 @@ def test_cancel_prevents_fill():
     place(e, oid="a1", side=Side.SELL, price=100, qty=5, client_ts_ns=1)
 
     ev_c = cancel(e, oid="a1", client_ts_ns=2)
-    assert types(ev_c) == ["OrderCanceled", "TopOfBookChanged"]
+    assert types(ev_c) == ["OrderCanceled", "FundsReleased", "TopOfBookChanged"]
 
     ev_b1 = place(e, oid="b1", side=Side.BUY, price=100, qty=5, client_ts_ns=3)
     assert types(ev_b1)[0] == "OrderAccepted"

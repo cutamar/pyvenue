@@ -377,6 +377,16 @@ class Engine:
         asset = self.resolve_assets(record.instrument)[record.side]
         events = []
         seq, ts = self.next_meta()
+        self.logger.debug("Cancel seq and ts", seq=seq, ts=ts)
+        events.append(
+            OrderCanceled(
+                seq=seq,
+                ts_ns=ts,
+                instrument=command.instrument,
+                order_id=command.order_id,
+            )
+        )
+        seq, ts = self.next_meta()
         events.append(
             FundsReleased(
                 seq=seq,
@@ -385,16 +395,6 @@ class Engine:
                 account_id=command.account_id,
                 asset=asset,
                 amount=Price(record.qty.lots * record.price.ticks),
-            )
-        )
-        seq, ts = self.next_meta()
-        self.logger.debug("Cancel seq and ts", seq=seq, ts=ts)
-        events.append(
-            OrderCanceled(
-                seq=seq,
-                ts_ns=ts,
-                instrument=command.instrument,
-                order_id=command.order_id,
             )
         )
         return events
