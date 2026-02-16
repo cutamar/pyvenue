@@ -159,7 +159,8 @@ def test_replay_reconstructs_multiple_books() -> None:
         },
     )
 
-    all_events: list[Event] = []
+    all_events = v.engines[BTC].log.all()
+    all_events.extend(v.engines[ETH].log.all())
 
     # BTC: maker rests, then partially filled
     all_events.extend(v.submit(_pl(BTC, "m1", Side.SELL, 100, 5, 1)))

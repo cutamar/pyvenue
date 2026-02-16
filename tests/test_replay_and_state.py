@@ -91,7 +91,7 @@ def test_replay_reconstructs_same_state() -> None:
         {"alice": {"USD": 999999, "BTC": 999999}},
     )
 
-    all_events = []
+    all_events = e.log.all()
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
     all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1)))
     all_events.extend(e.submit(_pl(inst, "t2", Side.BUY, 200, 3, 1)))
@@ -118,7 +118,7 @@ def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
         {"alice": {"USD": 999999, "BTC": 999999}},
     )
 
-    all_events: list[Event] = []
+    all_events = e.log.all()
     # Resting ask m1: 5@100
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
 
@@ -156,7 +156,7 @@ def test_replay_book_allows_matching_after_replay() -> None:
         {"alice": {"USD": 999999, "BTC": 999999}},
     )
 
-    all_events: list[Event] = []
+    all_events = e.log.all()
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 3, 1)))  # maker rests
 
     # Replay into new engine with rebuilt book
@@ -193,7 +193,7 @@ def test_replay_book_applies_trade_occurred_to_maker_remaining() -> None:
         {"alice": {"USD": 999999, "BTC": 999999}},
     )
 
-    all_events: list[Event] = []
+    all_events = e.log.all()
     # maker rests 5@100
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
     # taker buys 2, so maker remaining should become 3
@@ -221,7 +221,7 @@ def test_replay_book_trade_fully_filled_maker_is_not_cancelable() -> None:
         {"alice": {"USD": 999999, "BTC": 999999}},
     )
 
-    all_events: list[Event] = []
+    all_events = e.log.all()
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 2, 1)))
     all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))  # fully fills m1
 
@@ -245,7 +245,7 @@ def test_replay_book_applies_order_canceled_removes_resting_order() -> None:
         {"alice": {"USD": 999999, "BTC": 999999}},
     )
 
-    all_events: list[Event] = []
+    all_events = e.log.all()
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
     all_events.extend(e.submit(_cx(inst, "m1", 2)))
 
