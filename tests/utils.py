@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from pyvenue.domain.events import FundsCredited
-from pyvenue.domain.types import AccountId, Asset, Instrument, Price
+from pyvenue.domain.types import AccountId, Asset, Instrument, Qty
 from pyvenue.engine.engine import Engine
 from pyvenue.infra.clock import Clock
 from pyvenue.venue import Venue
@@ -48,7 +48,7 @@ def engine_with_balances(
                 instrument=Instrument(instrument),
                 account_id=AccountId(acct),
                 asset=Asset(asset),
-                amount=Price(amt),
+                amount=Qty(amt),
             )
             e.log.append(ev)
             e.state.apply(ev)
@@ -69,7 +69,7 @@ def venue_with_balances(
                     instrument=Instrument(instrument),
                     account_id=AccountId(acct),
                     asset=Asset(asset),
-                    amount=Price(amt),
+                    amount=Qty(amt),
                 )
                 v.engines[Instrument(instrument)].log.append(ev)
                 v.engines[Instrument(instrument)].state.apply(ev)

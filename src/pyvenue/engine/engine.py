@@ -220,9 +220,7 @@ class Engine:
             events = [
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
-        elif command.price.ticks * command.qty.lots > self.state.available(
-            command.account_id, asset
-        ):
+        elif command.qty.lots > self.state.available(command.account_id, asset):
             self.logger.warning(
                 "PlaceLimit command rejected: insufficient funds", command=command
             )
@@ -314,7 +312,7 @@ class Engine:
                             instrument=command.instrument,
                             account_id=command.account_id,
                             asset=self.resolve_assets(command.instrument)[command.side],
-                            amount=Price(command.qty.lots * command.price.ticks),
+                            amount=Qty(remaining),
                         )
                     )
                     seq, ts = self.next_meta()
@@ -394,7 +392,7 @@ class Engine:
                 instrument=command.instrument,
                 account_id=command.account_id,
                 asset=asset,
-                amount=Price(record.qty.lots * record.price.ticks),
+                amount=Qty(record.qty.lots),
             )
         )
         return events

@@ -131,7 +131,7 @@ class EngineState:
         logger.debug("Applying funds credited event", trade_event=event)
         if event.account_id not in self.accounts:
             self.accounts[event.account_id] = {}
-        self.accounts[event.account_id][event.asset] = event.amount.ticks
+        self.accounts[event.account_id][event.asset] = event.amount.lots
         if event.account_id not in self.accounts_held:
             self.accounts_held[event.account_id] = {}
         self.accounts_held[event.account_id][event.asset] = 0
@@ -145,14 +145,14 @@ class EngineState:
             raise ValueError(
                 f"Asset {event.asset!r} not found for account {event.account_id!r}"
             )
-        if self.accounts[event.account_id][event.asset] < event.amount.ticks:
+        if self.accounts[event.account_id][event.asset] < event.amount.lots:
             raise ValueError(f"Insufficient funds for account {event.account_id!r}")
-        self.accounts[event.account_id][event.asset] -= event.amount.ticks
+        self.accounts[event.account_id][event.asset] -= event.amount.lots
         if event.account_id not in self.accounts_held:
             self.accounts_held[event.account_id] = {}
         if event.asset not in self.accounts_held[event.account_id]:
             self.accounts_held[event.account_id][event.asset] = 0
-        self.accounts_held[event.account_id][event.asset] += event.amount.ticks
+        self.accounts_held[event.account_id][event.asset] += event.amount.lots
 
     @apply.register
     def _(self, event: FundsReleased) -> None:
@@ -163,15 +163,15 @@ class EngineState:
             raise ValueError(
                 f"Asset {event.asset!r} not found for account {event.account_id!r}"
             )
-        if self.accounts_held[event.account_id][event.asset] < event.amount.ticks:
+        if self.accounts_held[event.account_id][event.asset] < event.amount.lots:
             raise ValueError(
                 f"Insufficient held funds for account {event.account_id!r}"
             )
-        self.accounts_held[event.account_id][event.asset] -= event.amount.ticks
+        self.accounts_held[event.account_id][event.asset] -= event.amount.lots
         if event.account_id not in self.accounts:
             raise ValueError(f"Account {event.account_id!r} not found")
         if event.asset not in self.accounts[event.account_id]:
             raise ValueError(
                 f"Asset {event.asset!r} not found for account {event.account_id!r}"
             )
-        self.accounts[event.account_id][event.asset] += event.amount.ticks
+        self.accounts[event.account_id][event.asset] += event.amount.lots

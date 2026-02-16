@@ -90,7 +90,7 @@ class FundsCredited:
     instrument: Instrument
     account_id: AccountId
     asset: Asset
-    amount: Price
+    amount: Qty
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -101,7 +101,7 @@ class FundsReserved:
     instrument: Instrument
     account_id: AccountId
     asset: Asset
-    amount: Price
+    amount: Qty
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -112,7 +112,7 @@ class FundsReleased:
     instrument: Instrument
     account_id: AccountId
     asset: Asset
-    amount: Price
+    amount: Qty
 
 
 Event = (
