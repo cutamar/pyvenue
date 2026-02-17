@@ -30,7 +30,7 @@ from pyvenue.domain.types import (
     TimeInForce,
 )
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
-from pyvenue.engine.state import EngineState, OrderStatus
+from pyvenue.engine.state import EngineState, OrderRecord, OrderStatus
 from pyvenue.infra import EventLog
 
 logger = structlog.get_logger(__name__)
@@ -100,6 +100,13 @@ class Engine:
             self.log.append(e)
             self.state.apply(e)
         return events
+
+    def get_order_amount(self, command: PlaceLimit | OrderRecord) -> Qty:
+        return (
+            Qty(command.qty.lots)
+            if command.side == Side.SELL
+            else Qty(command.qty.lots * command.price.ticks)
+        )
 
     @classmethod
     def replay(
@@ -220,7 +227,9 @@ class Engine:
             events = [
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
-        elif command.qty.lots > self.state.available(command.account_id, asset):
+        elif self.get_order_amount(command).lots > self.state.available(
+            command.account_id, asset
+        ):
             self.logger.warning(
                 "PlaceLimit command rejected: insufficient funds", command=command
             )
@@ -312,7 +321,7 @@ class Engine:
                             instrument=command.instrument,
                             account_id=command.account_id,
                             asset=self.resolve_assets(command.instrument)[command.side],
-                            amount=Qty(remaining),
+                            amount=self.get_order_amount(command),
                         )
                     )
                     seq, ts = self.next_meta()
@@ -392,7 +401,7 @@ class Engine:
                 instrument=command.instrument,
                 account_id=command.account_id,
                 asset=asset,
-                amount=Qty(record.qty.lots),
+                amount=self.get_order_amount(record),
             )
         )
         return events
