@@ -35,6 +35,7 @@ class OrderStatus(str, Enum):
 class OrderRecord:
     instrument: Instrument
     order_id: OrderId
+    account_id: AccountId
     side: Side
     price: Price
     qty: Qty
@@ -76,6 +77,7 @@ class EngineState:
         self.orders[event.order_id] = OrderRecord(
             instrument=event.instrument,
             order_id=event.order_id,
+            account_id=event.account_id,
             side=event.side,
             price=event.price,
             qty=event.qty,
@@ -103,6 +105,43 @@ class EngineState:
             record.remaining = Qty(max(0, new_remaining))
             if record.remaining.lots == 0 and record.status == OrderStatus.ACTIVE:
                 record.status = OrderStatus.FILLED
+            from pyvenue.engine.engine import Engine
+
+            total_price = event.qty.lots * event.price.ticks
+            assets = Engine.resolve_assets(record.instrument)
+            base_asset = assets[Side.BUY]
+            quote_asset = assets[Side.SELL]
+            if record.side == Side.BUY:
+                logger.info(
+                    "Decreasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=base_asset,
+                    qty=total_price,
+                )
+                self.accounts[record.account_id][base_asset] -= total_price
+                logger.info(
+                    "Increasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=quote_asset,
+                    qty=event.qty.lots,
+                )
+                self.accounts[record.account_id][quote_asset] += event.qty.lots
+            else:
+                logger.info(
+                    "Increasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=base_asset,
+                    qty=total_price,
+                )
+                self.accounts[record.account_id][base_asset] += total_price
+                logger.info(
+                    "Decreasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=quote_asset,
+                    qty=event.qty.lots,
+                )
+                self.accounts[record.account_id][quote_asset] -= event.qty.lots
+
         self._log_state()
 
     @apply.register

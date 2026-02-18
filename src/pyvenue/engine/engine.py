@@ -67,7 +67,8 @@ class Engine:
             reason=reason,
         )
 
-    def resolve_assets(self, instrument: Instrument):
+    @staticmethod
+    def resolve_assets(instrument: Instrument):
         base, quote = instrument.split("-")
         return {Side.SELL: Asset(base), Side.BUY: Asset(quote)}
 
@@ -159,6 +160,7 @@ class Engine:
                     seq=seq,
                     ts_ns=ts,
                     instrument=command.instrument,
+                    account_id=command.account_id,
                     order_id=command.order_id,
                     side=command.side,
                     price=price,
@@ -279,6 +281,7 @@ class Engine:
                     seq=seq,
                     ts_ns=ts,
                     instrument=command.instrument,
+                    account_id=command.account_id,
                     order_id=command.order_id,
                     side=command.side,
                     price=command.price,
