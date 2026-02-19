@@ -48,11 +48,15 @@ class EngineState:
     orders: dict[OrderId, OrderRecord]
     accounts: dict[AccountId, dict[Asset, int]]
     accounts_held: dict[AccountId, dict[Asset, int]]
+    base_asset: Asset
+    quote_asset: Asset
 
-    def __init__(self) -> None:
+    def __init__(self, base_asset: Asset, quote_asset: Asset) -> None:
         self.orders = {}
         self.accounts = {}
         self.accounts_held = {}
+        self.base_asset = base_asset
+        self.quote_asset = quote_asset
 
     def _log_state(self) -> None:
         logger.debug("Engine state", orders=self.orders)
@@ -106,52 +110,52 @@ class EngineState:
             record.remaining = Qty(max(0, new_remaining))
             if record.remaining.lots == 0 and record.status == OrderStatus.ACTIVE:
                 record.status = OrderStatus.FILLED
-            from pyvenue.engine.engine import Engine
 
             total_price = event.qty.lots * event.price.ticks
-            assets = Engine.resolve_assets(record.instrument)
-            base_asset = assets[Side.BUY]
-            quote_asset = assets[Side.SELL]
             if record.side == Side.BUY:
-                logger.info(
+                logger.debug(
                     "Decreasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
-                    asset=base_asset,
+                    asset=self.base_asset,
                     qty=total_price,
                     is_maker=is_maker,
                 )
                 if is_maker:
-                    self.accounts_held[record.account_id][base_asset] -= total_price
+                    self.accounts_held[record.account_id][self.base_asset] -= (
+                        total_price
+                    )
                 else:
-                    self.accounts[record.account_id][base_asset] -= total_price
-                logger.info(
+                    self.accounts[record.account_id][self.base_asset] -= total_price
+                logger.debug(
                     "Increasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
-                    asset=quote_asset,
+                    asset=self.quote_asset,
                     qty=event.qty.lots,
                     is_maker=is_maker,
                 )
-                self.accounts[record.account_id][quote_asset] += event.qty.lots
+                self.accounts[record.account_id][self.quote_asset] += event.qty.lots
             else:
-                logger.info(
+                logger.debug(
                     "Increasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
-                    asset=base_asset,
+                    asset=self.base_asset,
                     qty=total_price,
                     is_maker=is_maker,
                 )
-                self.accounts[record.account_id][base_asset] += total_price
-                logger.info(
+                self.accounts[record.account_id][self.base_asset] += total_price
+                logger.debug(
                     "Decreasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
-                    asset=quote_asset,
+                    asset=self.quote_asset,
                     qty=event.qty.lots,
                     is_maker=is_maker,
                 )
                 if is_maker:
-                    self.accounts_held[record.account_id][quote_asset] -= event.qty.lots
+                    self.accounts_held[record.account_id][self.quote_asset] -= (
+                        event.qty.lots
+                    )
                 else:
-                    self.accounts[record.account_id][quote_asset] -= event.qty.lots
+                    self.accounts[record.account_id][self.quote_asset] -= event.qty.lots
 
         self._log_state()
 

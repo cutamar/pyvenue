@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pyvenue.domain.commands import Cancel, PlaceLimit
-from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Asset, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.state import EngineState
 from utils import FixedClock, NextMeta, engine_with_balances
 
@@ -71,7 +71,7 @@ def test_replay_events_rebuilds_same_state():
 
     events = engine.log.all()
 
-    rebuilt = EngineState()
+    rebuilt = EngineState(base_asset=Asset("BTC"), quote_asset=Asset("USD"))
     rebuilt.apply_all(events)
 
     orig = engine.state.orders[OrderId("o1")]

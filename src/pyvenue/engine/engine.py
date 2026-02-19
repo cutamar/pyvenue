@@ -40,13 +40,17 @@ logger = structlog.get_logger(__name__)
 class Engine:
     instrument: Instrument
     next_meta: Callable[[], tuple[int, int]]
-    state: EngineState = field(default_factory=EngineState)
+    state: EngineState = field(init=False)
     log: EventLog = field(default_factory=EventLog)
     book: OrderBook = field(init=False)
     logger: structlog.BoundLogger = field(init=False)
 
     def __post_init__(self) -> None:
         self.book = OrderBook(self.instrument)
+        assets = self.resolve_assets(self.instrument)
+        base_asset = assets[Side.BUY]
+        quote_asset = assets[Side.SELL]
+        self.state = EngineState(base_asset=base_asset, quote_asset=quote_asset)
         self.logger = logger.bind(
             _component=self.__class__.__name__,
             instrument=self.instrument,
@@ -103,15 +107,15 @@ class Engine:
         return events
 
     def get_order_amount(self, command: PlaceLimit | OrderRecord) -> Qty:
-        if isinstance(command, OrderRecord):
-            qty_lots = command.remaining.lots
-        else:
-            qty_lots = command.qty.lots
-        return (
-            Qty(qty_lots)
-            if command.side == Side.SELL
-            else Qty(qty_lots * command.price.ticks)
+        qty_lots = (
+            command.remaining.lots
+            if isinstance(command, OrderRecord)
+            else command.qty.lots
         )
+        if command.side == Side.SELL:
+            return Qty(qty_lots)
+        else:
+            return Qty(qty_lots * command.price.ticks)
 
     @classmethod
     def replay(
