@@ -100,7 +100,8 @@ class EngineState:
         for order_id in (event.taker_order_id, event.maker_order_id):
             record = self.orders.get(order_id)
             if record is None:
-                return
+                continue
+            is_maker = order_id == event.maker_order_id
             new_remaining = record.remaining.lots - event.qty.lots
             record.remaining = Qty(max(0, new_remaining))
             if record.remaining.lots == 0 and record.status == OrderStatus.ACTIVE:
@@ -117,13 +118,18 @@ class EngineState:
                     account=record.account_id,
                     asset=base_asset,
                     qty=total_price,
+                    is_maker=is_maker,
                 )
-                self.accounts[record.account_id][base_asset] -= total_price
+                if is_maker:
+                    self.accounts_held[record.account_id][base_asset] -= total_price
+                else:
+                    self.accounts[record.account_id][base_asset] -= total_price
                 logger.info(
                     "Increasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
                     asset=quote_asset,
                     qty=event.qty.lots,
+                    is_maker=is_maker,
                 )
                 self.accounts[record.account_id][quote_asset] += event.qty.lots
             else:
@@ -132,6 +138,7 @@ class EngineState:
                     account=record.account_id,
                     asset=base_asset,
                     qty=total_price,
+                    is_maker=is_maker,
                 )
                 self.accounts[record.account_id][base_asset] += total_price
                 logger.info(
@@ -139,8 +146,12 @@ class EngineState:
                     account=record.account_id,
                     asset=quote_asset,
                     qty=event.qty.lots,
+                    is_maker=is_maker,
                 )
-                self.accounts[record.account_id][quote_asset] -= event.qty.lots
+                if is_maker:
+                    self.accounts_held[record.account_id][quote_asset] -= event.qty.lots
+                else:
+                    self.accounts[record.account_id][quote_asset] -= event.qty.lots
 
         self._log_state()
 

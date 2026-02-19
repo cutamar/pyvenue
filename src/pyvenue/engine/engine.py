@@ -103,10 +103,14 @@ class Engine:
         return events
 
     def get_order_amount(self, command: PlaceLimit | OrderRecord) -> Qty:
+        if isinstance(command, OrderRecord):
+            qty_lots = command.remaining.lots
+        else:
+            qty_lots = command.qty.lots
         return (
-            Qty(command.qty.lots)
+            Qty(qty_lots)
             if command.side == Side.SELL
-            else Qty(command.qty.lots * command.price.ticks)
+            else Qty(qty_lots * command.price.ticks)
         )
 
     @classmethod
