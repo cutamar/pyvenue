@@ -38,3 +38,11 @@ class TimeInForce(str, Enum):
     GTC = "GTC"
     IOC = "IOC"
     FOK = "FOK"
+
+
+@dataclass(frozen=True, slots=True)
+class FeeSchedule:
+    maker_bps: int
+    taker_bps: int
+    fee_account: AccountId
+    fee_asset: Asset
