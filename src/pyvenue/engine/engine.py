@@ -22,6 +22,7 @@ from pyvenue.domain.events import (
 )
 from pyvenue.domain.types import (
     Asset,
+    FeeSchedule,
     Instrument,
     OrderId,
     Price,
@@ -40,6 +41,7 @@ logger = structlog.get_logger(__name__)
 class Engine:
     instrument: Instrument
     next_meta: Callable[[], tuple[int, int]]
+    fee_schedule: FeeSchedule | None = field(default=None)
     state: EngineState = field(init=False)
     log: EventLog = field(default_factory=EventLog)
     book: OrderBook = field(init=False)

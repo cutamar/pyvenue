@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 from pyvenue.domain.commands import PlaceLimit, PlaceMarket
+from pyvenue.domain.events import FundsCredited
 from pyvenue.domain.types import (
     AccountId,
     Asset,
@@ -15,6 +16,7 @@ from pyvenue.domain.types import (
     TimeInForce,
 )
 from pyvenue.engine.engine import Engine
+from utils import NextMeta
 
 INSTR = Instrument("BTC-USD")
 BASE = Asset("BTC")
@@ -41,15 +43,34 @@ def _engine_with_balances_and_fees(
             fee_account=AccountId(fee_account),
             fee_asset=QUOTE,
         ),
+        next_meta=NextMeta(),
     )
 
     for acct, assets in balances.items():
         for asset, amt in assets.items():
-            e.state.credit(AccountId(acct), Asset(asset), amt)
+            ev = FundsCredited(
+                seq=-1,
+                ts_ns=0,
+                instrument=INSTR,
+                account_id=AccountId(acct),
+                asset=Asset(asset),
+                amount=Qty(amt),
+            )
+            e.log.append(ev)
+            e.state.apply(ev)
 
     # ensure fee account exists
     if fee_account not in balances:
-        e.state.credit(AccountId(fee_account), QUOTE, 0)
+        ev = FundsCredited(
+            seq=-1,
+            ts_ns=0,
+            instrument=INSTR,
+            account_id=AccountId(fee_account),
+            asset=Asset(QUOTE),
+            amount=Qty(0),
+        )
+        e.log.append(ev)
+        e.state.apply(ev)
 
     return e
 
