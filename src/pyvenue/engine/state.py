@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import singledispatchmethod
 
@@ -19,7 +20,16 @@ from pyvenue.domain.events import (
     TopOfBookChanged,
     TradeOccurred,
 )
-from pyvenue.domain.types import AccountId, Asset, Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import (
+    AccountId,
+    Asset,
+    FeeSchedule,
+    Instrument,
+    OrderId,
+    Price,
+    Qty,
+    Side,
+)
 
 logger = get_logger()
 
@@ -50,13 +60,20 @@ class EngineState:
     accounts_held: dict[AccountId, dict[Asset, int]]
     base_asset: Asset
     quote_asset: Asset
+    fee_schedule: FeeSchedule | None = field(default=None)
 
-    def __init__(self, base_asset: Asset, quote_asset: Asset) -> None:
+    def __init__(
+        self,
+        base_asset: Asset,
+        quote_asset: Asset,
+        fee_schedule: FeeSchedule | None = None,
+    ) -> None:
         self.orders = {}
         self.accounts = {}
         self.accounts_held = {}
         self.base_asset = base_asset
         self.quote_asset = quote_asset
+        self.fee_schedule = fee_schedule
 
     def _log_state(self) -> None:
         logger.debug("Engine state", orders=self.orders)
@@ -66,6 +83,54 @@ class EngineState:
 
     def held(self, account: AccountId, asset: Asset) -> int:
         return self.accounts_held[account][asset]
+
+    def process_trade_fees(self, trade: TradeOccurred) -> None:
+        if self.fee_schedule is None:
+            return
+        if trade.maker_order_id in self.orders:
+            maker_order = self.orders[trade.maker_order_id]
+            fee = math.ceil(
+                (self.fee_schedule.maker_bps * trade.qty.lots * trade.price.ticks)
+                / 10_000
+            )
+            logger.debug(
+                "Decreasing fee from maker account",
+                account=maker_order.account_id,
+                asset=self.fee_schedule.fee_asset,
+                qty=fee,
+            )
+            self.accounts[maker_order.account_id][self.fee_schedule.fee_asset] -= fee
+            logger.debug(
+                "Add fee to fee account",
+                account=self.fee_schedule.fee_account,
+                asset=self.fee_schedule.fee_asset,
+                qty=fee,
+            )
+            self.accounts[self.fee_schedule.fee_account][
+                self.fee_schedule.fee_asset
+            ] += fee
+        if trade.taker_order_id in self.orders:
+            taker_order = self.orders[trade.taker_order_id]
+            fee = math.ceil(
+                (self.fee_schedule.taker_bps * trade.qty.lots * trade.price.ticks)
+                / 10_000
+            )
+            logger.debug(
+                "Decreasing fee from taker account",
+                account=taker_order.account_id,
+                asset=self.fee_schedule.fee_asset,
+                qty=fee,
+            )
+            self.accounts[taker_order.account_id][self.fee_schedule.fee_asset] -= fee
+            logger.debug(
+                "Add fee to fee account",
+                account=self.fee_schedule.fee_account,
+                asset=self.fee_schedule.fee_asset,
+                qty=fee,
+            )
+            self.accounts[self.fee_schedule.fee_account][
+                self.fee_schedule.fee_asset
+            ] += fee
 
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
@@ -156,6 +221,7 @@ class EngineState:
                     )
                 else:
                     self.accounts[record.account_id][self.quote_asset] -= event.qty.lots
+        self.process_trade_fees(event)
 
         self._log_state()
 

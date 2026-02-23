@@ -52,7 +52,11 @@ class Engine:
         assets = self.resolve_assets(self.instrument)
         base_asset = assets[Side.BUY]
         quote_asset = assets[Side.SELL]
-        self.state = EngineState(base_asset=base_asset, quote_asset=quote_asset)
+        self.state = EngineState(
+            base_asset=base_asset,
+            quote_asset=quote_asset,
+            fee_schedule=self.fee_schedule,
+        )
         self.logger = logger.bind(
             _component=self.__class__.__name__,
             instrument=self.instrument,
