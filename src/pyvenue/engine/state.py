@@ -251,10 +251,19 @@ class EngineState:
         logger.debug("Applying funds credited event", trade_event=event)
         if event.account_id not in self.accounts:
             self.accounts[event.account_id] = {}
-        self.accounts[event.account_id][event.asset] = event.amount.lots
+        if self.base_asset not in self.accounts[event.account_id]:
+            self.accounts[event.account_id][self.base_asset] = 0
+        if self.quote_asset not in self.accounts[event.account_id]:
+            self.accounts[event.account_id][self.quote_asset] = 0
+
+        self.accounts[event.account_id][event.asset] += event.amount.lots
+
         if event.account_id not in self.accounts_held:
             self.accounts_held[event.account_id] = {}
-        self.accounts_held[event.account_id][event.asset] = 0
+        if self.base_asset not in self.accounts_held[event.account_id]:
+            self.accounts_held[event.account_id][self.base_asset] = 0
+        if self.quote_asset not in self.accounts_held[event.account_id]:
+            self.accounts_held[event.account_id][self.quote_asset] = 0
 
     @apply.register
     def _(self, event: FundsReserved) -> None:
