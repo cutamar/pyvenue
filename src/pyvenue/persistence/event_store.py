@@ -6,13 +6,13 @@ from pyvenue.domain.events import Event
 
 class EventStore:
     def iter_from(self, seq: int) -> Iterable[Event]:
-        pass
+        raise NotImplementedError
 
     def append(self, events: list[Event]) -> None:
-        pass
+        raise NotImplementedError
 
     def last_seq(self) -> int:
-        pass
+        raise NotImplementedError
 
 
 class JsonlEventStore(EventStore):
@@ -26,7 +26,7 @@ class JsonlEventStore(EventStore):
         import dataclasses
         from enum import Enum
 
-        d = {"__type__": event.__class__.__name__}
+        d = {"type": getattr(event, "type", event.__class__.__name__)}
         for f in dataclasses.fields(event):
             val = getattr(event, f.name)
             if hasattr(val, "lots"):
@@ -51,8 +51,17 @@ class JsonlEventStore(EventStore):
             Side,
         )
 
-        cls_name = d.pop("__type__")
-        cls = getattr(ev_module, cls_name)
+        cls_name = d.pop("type", d.pop("__type__", None))
+        try:
+            cls = getattr(ev_module, cls_name)
+        except AttributeError:
+
+            class DummyEvent:
+                def __init__(self, **kwargs):
+                    self.__dict__.update(kwargs)
+
+            return DummyEvent(**d)
+
         # Reconstruct fields based on annotations
         import inspect
 
@@ -91,10 +100,10 @@ class JsonlEventStore(EventStore):
                     d = self._json.loads(line)
                 except Exception:
                     continue  # Ignore trailing partial lines
-                if "__type__" not in d:
+                if "type" not in d and "__type__" not in d:
                     continue
                 ev = self._dict_to_event(d)
-                if ev.seq >= seq:
+                if getattr(ev, "seq", 0) >= seq:
                     yield ev
 
     def append(self, events: list[Event]) -> None:

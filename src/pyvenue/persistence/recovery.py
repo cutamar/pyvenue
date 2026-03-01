@@ -1,10 +1,12 @@
+from dataclasses import dataclass
+
 from pyvenue.domain.types import Instrument
 from pyvenue.persistence.event_store import EventStore
 from pyvenue.persistence.snapshot_store import SnapshotStore
 from pyvenue.venue import Venue
 
 
-@__import__("dataclasses").dataclass
+@dataclass(slots=True)
 class RecoveryStats:
     loaded_snapshot: bool = False
     snapshot_seq: int = 0

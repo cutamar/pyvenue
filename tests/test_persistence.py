@@ -2,10 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyvenue.persistence.event_store import JsonlEventStore
-from pyvenue.persistence.recovery import recover_venue
-from pyvenue.persistence.snapshot_store import JsonSnapshotStore
-
 from pyvenue.domain.commands import PlaceLimit, PlaceMarket
 from pyvenue.domain.types import (
     AccountId,
@@ -16,6 +12,9 @@ from pyvenue.domain.types import (
     Side,
     TimeInForce,
 )
+from pyvenue.persistence.event_store import JsonlEventStore
+from pyvenue.persistence.recovery import recover_venue
+from pyvenue.persistence.snapshot_store import JsonSnapshotStore
 from pyvenue.venue import Venue
 
 BTC = Instrument("BTC-USD")
@@ -96,6 +95,8 @@ def test_eventstore_roundtrip_and_recover_matches_in_memory(tmp_path: Path) -> N
     _seed_balances(v)
 
     all_events = []
+    for eng in v.engines.values():
+        all_events.extend(eng.log.all())
 
     # BTC: bob rests sell, alice market buys partially
     all_events.extend(v.submit(_pl_limit(BTC, "bob", "btc_s1", Side.SELL, 100, 5, 1)))
@@ -134,6 +135,8 @@ def test_recovery_uses_snapshot_then_replays_tail(tmp_path: Path) -> None:
 
     # Generate a history
     events1 = []
+    for eng in v.engines.values():
+        events1.extend(eng.log.all())
     events1.extend(v.submit(_pl_limit(BTC, "bob", "s1", Side.SELL, 100, 10, 1)))
     events1.extend(v.submit(_pl_mkt(BTC, "alice", "mb1", Side.BUY, 4, 2)))
     store.append(events1)

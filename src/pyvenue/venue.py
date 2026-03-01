@@ -33,15 +33,17 @@ class _VenueState:
         asset = Asset(str(asset))
         for engine in self.venue.engines.values():
             if asset in (engine.state.base_asset, engine.state.quote_asset):
+                seq, ts = self.venue._next_meta()
                 ev = FundsCredited(
-                    seq=-1,
-                    ts_ns=0,
+                    seq=seq,
+                    ts_ns=ts,
                     instrument=engine.instrument,
                     account_id=account_id,
                     asset=asset,
                     amount=Qty(amount),
                 )
                 engine.state.apply(ev)
+                engine.log.append(ev)
 
     def digest(self) -> tuple:
         st = []
