@@ -55,12 +55,13 @@ class JsonlEventStore(EventStore):
         try:
             cls = getattr(ev_module, cls_name)
         except AttributeError:
+            from typing import cast
 
             class DummyEvent:
                 def __init__(self, **kwargs):
                     self.__dict__.update(kwargs)
 
-            return DummyEvent(**d)
+            return cast(Event, DummyEvent(**d))
 
         # Reconstruct fields based on annotations
         import inspect

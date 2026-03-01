@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal, overload
 
 from pyvenue.domain.types import Instrument
 from pyvenue.persistence.event_store import EventStore
@@ -12,6 +13,24 @@ class RecoveryStats:
     snapshot_seq: int = 0
     replayed_events: int = 0
     replayed_from_seq: int = 0
+
+
+@overload
+def recover_venue(
+    instruments: list[Instrument],
+    event_store: EventStore,
+    snapshot_store: SnapshotStore,
+    return_stats: Literal[False] = False,
+) -> Venue: ...
+
+
+@overload
+def recover_venue(
+    instruments: list[Instrument],
+    event_store: EventStore,
+    snapshot_store: SnapshotStore,
+    return_stats: Literal[True],
+) -> tuple[Venue, RecoveryStats]: ...
 
 
 def recover_venue(
