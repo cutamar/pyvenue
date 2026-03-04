@@ -4,13 +4,21 @@ import argparse
 import cProfile
 import pstats
 
-from bench.bench_orderflow import BenchConfig, scenario_cancel_heavy, scenario_insert_only, scenario_replay, scenario_sweep
+from pyvenue.bench.bench_orderflow import (
+    BenchConfig,
+    scenario_cancel_heavy,
+    scenario_insert_only,
+    scenario_replay,
+    scenario_sweep,
+)
 from pyvenue.domain.types import Instrument
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--scenario", choices=["insert", "cancel", "sweep", "replay"], required=True)
+    ap.add_argument(
+        "--scenario", choices=["insert", "cancel", "sweep", "replay"], required=True
+    )
     ap.add_argument("--n", type=int, default=50_000)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--outfile", default="profile.pstats")

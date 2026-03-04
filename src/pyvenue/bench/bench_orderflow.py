@@ -228,7 +228,7 @@ def scenario_replay(cfg: BenchConfig) -> None:
 
     def run():
         Venue.replay(
-            instruments=list(cfg.instruments), events=events, rebuild_books=True
+            instruments=list(cfg.instruments), events=events, rebuild_book=True
         )
 
     _, dt = _timeit("replay", run)
