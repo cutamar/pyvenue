@@ -102,13 +102,13 @@ def _seed_balances(v: Venue, cfg: BenchConfig) -> None:
         v.state.credit(fee, quote, 0)
 
 
-def _timeit(label: str, fn) -> None:
+def _timeit(label: str, fn) -> float:
     t0 = time.perf_counter()
-    out = fn()
+    fn()
     t1 = time.perf_counter()
     dt = t1 - t0
     print(f"{label}: {dt:.6f}s")
-    return out, dt
+    return dt
 
 
 def scenario_insert_only(cfg: BenchConfig) -> None:
@@ -127,7 +127,7 @@ def scenario_insert_only(cfg: BenchConfig) -> None:
             cmd = _mk_limit(inst, alice, f"o{i}", side, price, qty, client_ts_ns=i)
             v.submit(cmd)
 
-    _, dt = _timeit("insert_only", run)
+    dt = _timeit("insert_only", run)
     print(f"ops/sec: {cfg.n / dt:,.0f}")
 
 
@@ -155,7 +155,7 @@ def scenario_cancel_heavy(cfg: BenchConfig) -> None:
         for j, (inst, oid) in enumerate(oids):
             v.submit(_mk_cancel(inst, alice, oid, client_ts_ns=10_000_000 + j))
 
-    _, dt = _timeit("cancel_heavy", run)
+    dt = _timeit("cancel_heavy", run)
     print(f"ops/sec: {cfg.n / dt:,.0f}")
 
 
@@ -191,7 +191,7 @@ def scenario_sweep(cfg: BenchConfig) -> None:
                 )
             )
 
-    _, dt = _timeit("sweep_market_buy", run)
+    dt = _timeit("sweep_market_buy", run)
     print(f"ops/sec: {sweeps / dt:,.0f}")
 
 
@@ -231,7 +231,7 @@ def scenario_replay(cfg: BenchConfig) -> None:
             instruments=list(cfg.instruments), events=events, rebuild_book=True
         )
 
-    _, dt = _timeit("replay", run)
+    dt = _timeit("replay", run)
     print(f"events/sec: {len(events) / dt:,.0f} (events={len(events)})")
 
 
