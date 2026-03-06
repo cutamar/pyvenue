@@ -206,25 +206,23 @@ def scenario_replay(cfg: BenchConfig) -> None:
     alice = AccountId("alice")
     bob = AccountId("bob")
 
-    events = []
     for i in range(cfg.n):
         inst = cfg.instruments[i % len(cfg.instruments)]
         # Alternate: bob provides asks, alice takes via market occasionally
         if (i % 5) != 0:
             price = rng.randint(cfg.price_min, cfg.price_max)
             qty = rng.randint(cfg.qty_min, cfg.qty_max)
-            events.extend(
-                v.submit(
-                    _mk_limit(inst, bob, f"m{i}", Side.SELL, price, qty, client_ts_ns=i)
-                )
+            v.submit(
+                _mk_limit(inst, bob, f"m{i}", Side.SELL, price, qty, client_ts_ns=i)
             )
         else:
             qty = rng.randint(cfg.qty_min, cfg.qty_max)
-            events.extend(
-                v.submit(
-                    _mk_market(inst, alice, f"t{i}", Side.BUY, qty, client_ts_ns=i)
-                )
-            )
+            v.submit(_mk_market(inst, alice, f"t{i}", Side.BUY, qty, client_ts_ns=i))
+
+    events = []
+    for eng in v.engines.values():
+        events.extend(eng.log.all())
+    events.sort(key=lambda e: e.seq)
 
     def run():
         Venue.replay(
