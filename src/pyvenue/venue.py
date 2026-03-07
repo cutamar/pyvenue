@@ -48,16 +48,21 @@ class _VenueState:
     def digest(self) -> tuple:
         st = []
         for inst, eng in sorted(self.venue.engines.items()):
+            grouped_accounts = defaultdict(dict)
+            for (acc, asset), qty in eng.state.accounts.items():
+                if qty != 0:
+                    grouped_accounts[acc][asset] = qty
+
+            grouped_held = defaultdict(dict)
+            for (acc, asset), qty in eng.state.accounts_held.items():
+                if qty != 0:
+                    grouped_held[acc][asset] = qty
+
             st.append(
                 (
                     inst,
-                    sorted(
-                        (k, sorted(v.items())) for k, v in eng.state.accounts.items()
-                    ),
-                    sorted(
-                        (k, sorted(v.items()))
-                        for k, v in eng.state.accounts_held.items()
-                    ),
+                    sorted((k, sorted(v.items())) for k, v in grouped_accounts.items()),
+                    sorted((k, sorted(v.items())) for k, v in grouped_held.items()),
                     sorted((k, v.status) for k, v in eng.state.orders.items()),
                 )
             )

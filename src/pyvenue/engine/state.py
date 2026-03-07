@@ -56,8 +56,8 @@ class OrderRecord:
 @dataclass(slots=True)
 class EngineState:
     orders: dict[OrderId, OrderRecord]
-    accounts: dict[AccountId, dict[Asset, int]]
-    accounts_held: dict[AccountId, dict[Asset, int]]
+    accounts: dict[tuple[AccountId, Asset], int]
+    accounts_held: dict[tuple[AccountId, Asset], int]
     base_asset: Asset
     quote_asset: Asset
     fee_schedule: FeeSchedule | None = field(default=None)
@@ -68,9 +68,11 @@ class EngineState:
         quote_asset: Asset,
         fee_schedule: FeeSchedule | None = None,
     ) -> None:
+        from collections import defaultdict
+
         self.orders = {}
-        self.accounts = {}
-        self.accounts_held = {}
+        self.accounts = defaultdict(int)
+        self.accounts_held = defaultdict(int)
         self.base_asset = base_asset
         self.quote_asset = quote_asset
         self.fee_schedule = fee_schedule
@@ -79,10 +81,10 @@ class EngineState:
         logger.debug("Engine state", orders=self.orders)
 
     def available(self, account: AccountId, asset: Asset) -> int:
-        return self.accounts[account][asset]
+        return self.accounts[(account, asset)]
 
     def held(self, account: AccountId, asset: Asset) -> int:
-        return self.accounts_held[account][asset]
+        return self.accounts_held[(account, asset)]
 
     def process_trade_fees(self, trade: TradeOccurred) -> None:
         if self.fee_schedule is None:
@@ -99,15 +101,15 @@ class EngineState:
                 asset=self.fee_schedule.fee_asset,
                 qty=fee,
             )
-            self.accounts[maker_order.account_id][self.fee_schedule.fee_asset] -= fee
+            self.accounts[(maker_order.account_id, self.fee_schedule.fee_asset)] -= fee
             logger.debug(
                 "Add fee to fee account",
                 account=self.fee_schedule.fee_account,
                 asset=self.fee_schedule.fee_asset,
                 qty=fee,
             )
-            self.accounts[self.fee_schedule.fee_account][
-                self.fee_schedule.fee_asset
+            self.accounts[
+                (self.fee_schedule.fee_account, self.fee_schedule.fee_asset)
             ] += fee
         if trade.taker_order_id in self.orders:
             taker_order = self.orders[trade.taker_order_id]
@@ -121,15 +123,15 @@ class EngineState:
                 asset=self.fee_schedule.fee_asset,
                 qty=fee,
             )
-            self.accounts[taker_order.account_id][self.fee_schedule.fee_asset] -= fee
+            self.accounts[(taker_order.account_id, self.fee_schedule.fee_asset)] -= fee
             logger.debug(
                 "Add fee to fee account",
                 account=self.fee_schedule.fee_account,
                 asset=self.fee_schedule.fee_asset,
                 qty=fee,
             )
-            self.accounts[self.fee_schedule.fee_account][
-                self.fee_schedule.fee_asset
+            self.accounts[
+                (self.fee_schedule.fee_account, self.fee_schedule.fee_asset)
             ] += fee
 
     def apply_all(self, events: list[Event]) -> None:
@@ -186,11 +188,11 @@ class EngineState:
                     is_maker=is_maker,
                 )
                 if is_maker:
-                    self.accounts_held[record.account_id][self.base_asset] -= (
+                    self.accounts_held[(record.account_id, self.base_asset)] -= (
                         total_price
                     )
                 else:
-                    self.accounts[record.account_id][self.base_asset] -= total_price
+                    self.accounts[(record.account_id, self.base_asset)] -= total_price
                 logger.debug(
                     "Increasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
@@ -198,7 +200,7 @@ class EngineState:
                     qty=event.qty.lots,
                     is_maker=is_maker,
                 )
-                self.accounts[record.account_id][self.quote_asset] += event.qty.lots
+                self.accounts[(record.account_id, self.quote_asset)] += event.qty.lots
             else:
                 logger.debug(
                     "Increasing account {account} for asset {asset} by {qty}",
@@ -207,7 +209,7 @@ class EngineState:
                     qty=total_price,
                     is_maker=is_maker,
                 )
-                self.accounts[record.account_id][self.base_asset] += total_price
+                self.accounts[(record.account_id, self.base_asset)] += total_price
                 logger.debug(
                     "Decreasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
@@ -216,11 +218,13 @@ class EngineState:
                     is_maker=is_maker,
                 )
                 if is_maker:
-                    self.accounts_held[record.account_id][self.quote_asset] -= (
+                    self.accounts_held[(record.account_id, self.quote_asset)] -= (
                         event.qty.lots
                     )
                 else:
-                    self.accounts[record.account_id][self.quote_asset] -= event.qty.lots
+                    self.accounts[(record.account_id, self.quote_asset)] -= (
+                        event.qty.lots
+                    )
         self.process_trade_fees(event)
 
         self._log_state()
@@ -249,58 +253,22 @@ class EngineState:
     @apply.register
     def _(self, event: FundsCredited) -> None:
         logger.debug("Applying funds credited event", trade_event=event)
-        if event.account_id not in self.accounts:
-            self.accounts[event.account_id] = {}
-        if self.base_asset not in self.accounts[event.account_id]:
-            self.accounts[event.account_id][self.base_asset] = 0
-        if self.quote_asset not in self.accounts[event.account_id]:
-            self.accounts[event.account_id][self.quote_asset] = 0
-
-        self.accounts[event.account_id][event.asset] += event.amount.lots
-
-        if event.account_id not in self.accounts_held:
-            self.accounts_held[event.account_id] = {}
-        if self.base_asset not in self.accounts_held[event.account_id]:
-            self.accounts_held[event.account_id][self.base_asset] = 0
-        if self.quote_asset not in self.accounts_held[event.account_id]:
-            self.accounts_held[event.account_id][self.quote_asset] = 0
+        self.accounts[(event.account_id, event.asset)] += event.amount.lots
 
     @apply.register
     def _(self, event: FundsReserved) -> None:
         logger.debug("Applying funds reserved event", trade_event=event)
-        if event.account_id not in self.accounts:
-            raise ValueError(f"Account {event.account_id!r} not found")
-        if event.asset not in self.accounts[event.account_id]:
-            raise ValueError(
-                f"Asset {event.asset!r} not found for account {event.account_id!r}"
-            )
-        if self.accounts[event.account_id][event.asset] < event.amount.lots:
+        if self.accounts[(event.account_id, event.asset)] < event.amount.lots:
             raise ValueError(f"Insufficient funds for account {event.account_id!r}")
-        self.accounts[event.account_id][event.asset] -= event.amount.lots
-        if event.account_id not in self.accounts_held:
-            self.accounts_held[event.account_id] = {}
-        if event.asset not in self.accounts_held[event.account_id]:
-            self.accounts_held[event.account_id][event.asset] = 0
-        self.accounts_held[event.account_id][event.asset] += event.amount.lots
+        self.accounts[(event.account_id, event.asset)] -= event.amount.lots
+        self.accounts_held[(event.account_id, event.asset)] += event.amount.lots
 
     @apply.register
     def _(self, event: FundsReleased) -> None:
         logger.debug("Applying funds released event", trade_event=event)
-        if event.account_id not in self.accounts_held:
-            raise ValueError(f"Account {event.account_id!r} not found")
-        if event.asset not in self.accounts_held[event.account_id]:
-            raise ValueError(
-                f"Asset {event.asset!r} not found for account {event.account_id!r}"
-            )
-        if self.accounts_held[event.account_id][event.asset] < event.amount.lots:
+        if self.accounts_held[(event.account_id, event.asset)] < event.amount.lots:
             raise ValueError(
                 f"Insufficient held funds for account {event.account_id!r}"
             )
-        self.accounts_held[event.account_id][event.asset] -= event.amount.lots
-        if event.account_id not in self.accounts:
-            raise ValueError(f"Account {event.account_id!r} not found")
-        if event.asset not in self.accounts[event.account_id]:
-            raise ValueError(
-                f"Asset {event.asset!r} not found for account {event.account_id!r}"
-            )
-        self.accounts[event.account_id][event.asset] += event.amount.lots
+        self.accounts_held[(event.account_id, event.asset)] -= event.amount.lots
+        self.accounts[(event.account_id, event.asset)] += event.amount.lots

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import bisect
-from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import structlog
@@ -39,7 +38,8 @@ class PriceLevel:
     Adding a duplicate order_id will overwrite the existing order."""
 
     price: Price
-    orders: OrderedDict[OrderId, RestingOrder] = field(default_factory=OrderedDict)
+    orders: dict[OrderId, RestingOrder] = field(default_factory=dict)
+    total_qty: int = 0
     logger: structlog.BoundLogger = field(init=False)
 
     def __post_init__(self) -> None:
@@ -56,7 +56,10 @@ class PriceLevel:
 
     def add(self, order: RestingOrder) -> None:
         self.logger.debug("Adding order to level", order=order)
+        if order.order_id in self.orders:
+            self.total_qty -= self.orders[order.order_id].remaining.lots
         self.orders[order.order_id] = order
+        self.total_qty += order.remaining.lots
 
     def get(self, order_id: OrderId) -> RestingOrder | None:
         return self.orders.get(order_id, None)
@@ -64,7 +67,10 @@ class PriceLevel:
     def cancel(self, order_id: OrderId) -> bool:
         self.logger.debug("Canceling order from level", order_id=order_id)
         order = self.orders.pop(order_id, None)
-        return order is not None
+        if order is not None:
+            self.total_qty -= order.remaining.lots
+            return True
+        return False
 
     def peek_oldest(self) -> RestingOrder | None:
         return next(iter(self.orders.values()), None)
@@ -74,7 +80,9 @@ class PriceLevel:
             "Popping oldest order from level",
             order=self.peek_oldest(),
         )
-        _, order = self.orders.popitem(last=False)
+        first_key = next(iter(self.orders))
+        order = self.orders.pop(first_key)
+        self.total_qty -= order.remaining.lots
         return order
 
 
@@ -151,10 +159,12 @@ class OrderBook:
                     f"Order remaining qty is less than trade qty for order_id: {event.maker_order_id}"
                 )
             order.remaining = Qty(order.remaining.lots - event.qty.lots)
+            price_level.total_qty -= event.qty.lots
             if order.remaining.lots == 0:
-                price_level.cancel(event.maker_order_id)
-                self._remove_level_if_empty(side, price)
                 self.orders_by_id.pop(event.maker_order_id, None)
+                price_level.orders.pop(event.maker_order_id, None)
+                if not price_level.orders:
+                    self._remove_level_if_empty(side, price)
         elif isinstance(event, OrderCanceled):
             side_and_price = self.orders_by_id.get(event.order_id, None)
             if side_and_price is None:
@@ -319,7 +329,7 @@ class OrderBook:
                 continue
 
             # Sum up qty in this level
-            level_qty = sum(o.remaining.lots for o in level.orders.values())
+            level_qty = level.total_qty
 
             if level_qty >= qty_to_fill:
                 return True
@@ -377,6 +387,7 @@ class OrderBook:
                 )
                 taker_qty_lots -= fill_qty_lots
                 maker_order.remaining = Qty(maker_order.remaining.lots - fill_qty_lots)
+                maker_level.total_qty -= fill_qty_lots
 
                 if maker_order.remaining.lots == 0:
                     maker_order = maker_level.pop_oldest()

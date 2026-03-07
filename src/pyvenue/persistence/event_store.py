@@ -23,24 +23,120 @@ class JsonlEventStore(EventStore):
         self._json = json
 
     def _event_to_dict(self, event: Event) -> dict:
-        import dataclasses
-        from enum import Enum
+        from pyvenue.domain.events import (
+            FundsCredited,
+            FundsReleased,
+            FundsReserved,
+            OrderAccepted,
+            OrderCanceled,
+            OrderExpired,
+            OrderRejected,
+            OrderRested,
+            TopOfBookChanged,
+            TradeOccurred,
+        )
 
-        d = {"type": getattr(event, "type", event.__class__.__name__)}
-        for f in dataclasses.fields(event):
-            val = getattr(event, f.name)
-            if hasattr(val, "lots"):
-                d[f.name] = val.lots
-            elif hasattr(val, "ticks"):
-                d[f.name] = val.ticks
-            elif isinstance(val, Enum):
-                d[f.name] = val.value
-            else:
-                d[f.name] = val
-        return d
+        t = getattr(event, "type", event.__class__.__name__)
+
+        if isinstance(event, OrderAccepted):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "account_id": event.account_id,
+                "order_id": event.order_id,
+                "side": event.side.value,
+                "price": event.price.ticks,
+                "qty": event.qty.lots,
+            }
+        elif isinstance(event, OrderRejected):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "order_id": event.order_id,
+                "reason": event.reason,
+            }
+        elif isinstance(event, OrderCanceled):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "order_id": event.order_id,
+            }
+        elif isinstance(event, TradeOccurred):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "taker_order_id": event.taker_order_id,
+                "maker_order_id": event.maker_order_id,
+                "price": event.price.ticks,
+                "qty": event.qty.lots,
+            }
+        elif isinstance(event, TopOfBookChanged):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "best_bid_ticks": event.best_bid_ticks,
+                "best_ask_ticks": event.best_ask_ticks,
+            }
+        elif isinstance(event, OrderRested):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "order_id": event.order_id,
+                "side": event.side.value,
+                "price": event.price.ticks,
+                "qty": event.qty.lots,
+            }
+        elif isinstance(event, OrderExpired):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "order_id": event.order_id,
+                "qty": event.qty.lots,
+                "reason": event.reason,
+            }
+        elif isinstance(event, (FundsCredited, FundsReserved, FundsReleased)):
+            return {
+                "type": t,
+                "seq": event.seq,
+                "ts_ns": event.ts_ns,
+                "instrument": event.instrument,
+                "account_id": event.account_id,
+                "asset": event.asset,
+                "amount": event.amount.lots,
+            }
+
+        # Fallback (should not be hit if event types are complete)
+        return {"type": t}
 
     def _dict_to_event(self, d: dict) -> Event:
-        from pyvenue.domain import events as ev_module
+        from typing import cast
+
+        from pyvenue.domain.events import (
+            FundsCredited,
+            FundsReleased,
+            FundsReserved,
+            OrderAccepted,
+            OrderCanceled,
+            OrderExpired,
+            OrderRejected,
+            OrderRested,
+            TopOfBookChanged,
+            TradeOccurred,
+        )
         from pyvenue.domain.types import (
             AccountId,
             Asset,
@@ -51,44 +147,105 @@ class JsonlEventStore(EventStore):
             Side,
         )
 
-        cls_name = d.pop("type", d.pop("__type__", None))
-        try:
-            cls = getattr(ev_module, cls_name)
-        except AttributeError:
-            from typing import cast
+        t = d.pop("type", d.pop("__type__", None))
 
-            class DummyEvent:
-                def __init__(self, **kwargs):
-                    self.__dict__.update(kwargs)
+        if t == "OrderAccepted":
+            return OrderAccepted(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                account_id=AccountId(d["account_id"]),
+                order_id=OrderId(d["order_id"]),
+                side=Side(d["side"]),
+                price=Price(d["price"]),
+                qty=Qty(d["qty"]),
+            )
+        elif t == "OrderRejected":
+            return OrderRejected(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                order_id=OrderId(d["order_id"]),
+                reason=d["reason"],
+            )
+        elif t == "OrderCanceled":
+            return OrderCanceled(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                order_id=OrderId(d["order_id"]),
+            )
+        elif t == "TradeOccurred":
+            return TradeOccurred(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                taker_order_id=OrderId(d["taker_order_id"]),
+                maker_order_id=OrderId(d["maker_order_id"]),
+                price=Price(d["price"]),
+                qty=Qty(d["qty"]),
+            )
+        elif t == "TopOfBookChanged":
+            return TopOfBookChanged(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                best_bid_ticks=d["best_bid_ticks"],
+                best_ask_ticks=d["best_ask_ticks"],
+            )
+        elif t == "OrderRested":
+            return OrderRested(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                order_id=OrderId(d["order_id"]),
+                side=Side(d["side"]),
+                price=Price(d["price"]),
+                qty=Qty(d["qty"]),
+            )
+        elif t == "OrderExpired":
+            return OrderExpired(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                order_id=OrderId(d["order_id"]),
+                qty=Qty(d["qty"]),
+                reason=d["reason"],
+            )
+        elif t == "FundsCredited":
+            return FundsCredited(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                account_id=AccountId(d["account_id"]),
+                asset=Asset(d["asset"]),
+                amount=Qty(d["amount"]),
+            )
+        elif t == "FundsReserved":
+            return FundsReserved(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                account_id=AccountId(d["account_id"]),
+                asset=Asset(d["asset"]),
+                amount=Qty(d["amount"]),
+            )
+        elif t == "FundsReleased":
+            return FundsReleased(
+                seq=d["seq"],
+                ts_ns=d["ts_ns"],
+                instrument=Instrument(d["instrument"]),
+                account_id=AccountId(d["account_id"]),
+                asset=Asset(d["asset"]),
+                amount=Qty(d["amount"]),
+            )
 
-            return cast(Event, DummyEvent(**d))
+        # Fallback dummy event for unknown types
+        class DummyEvent:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
 
-        # Reconstruct fields based on annotations
-        import inspect
-
-        sig = inspect.signature(cls)
-        kwargs = {}
-        for k, v in d.items():
-            if k not in sig.parameters:
-                continue
-            anno = sig.parameters[k].annotation
-            if anno == "Qty" or anno == Qty:
-                kwargs[k] = Qty(v)
-            elif anno == "Price" or anno == Price:
-                kwargs[k] = Price(v)
-            elif anno == "Side" or anno == Side:
-                kwargs[k] = Side(v)
-            elif anno == "Instrument" or anno == Instrument:
-                kwargs[k] = Instrument(v)
-            elif anno == "AccountId" or anno == AccountId:
-                kwargs[k] = AccountId(v)
-            elif anno == "OrderId" or anno == OrderId:
-                kwargs[k] = OrderId(v)
-            elif anno == "Asset" or anno == Asset:
-                kwargs[k] = Asset(v)
-            else:
-                kwargs[k] = v
-        return cls(**kwargs)
+        return cast(Event, DummyEvent(**d))
 
     def iter_from(self, seq: int) -> Iterable[Event]:
         if not self.path.exists():
