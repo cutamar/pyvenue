@@ -24,10 +24,11 @@ def _pl_limit(
     client_ts_ns: int,
     tif: TimeInForce = TimeInForce.GTC,
     post_only: bool = False,
+    account_id: str = "alice",
 ) -> PlaceLimit:
     return PlaceLimit(
         instrument=INSTR,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         side=side,
         price=Price(price),
@@ -43,10 +44,11 @@ def _pl_mkt(
     side: Side,
     qty: int,
     client_ts_ns: int,
+    account_id: str = "alice",
 ) -> PlaceMarket:
     return PlaceMarket(
         instrument=INSTR,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         side=side,
         qty=Qty(qty),
@@ -88,13 +90,16 @@ def test_market_buy_sweeps_multiple_levels_and_never_rests() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
     e.submit(_pl_limit("a2", Side.SELL, 105, 3, 2))
 
-    ev = e.submit(_pl_mkt("mb1", Side.BUY, 4, 3))
+    ev = e.submit(_pl_mkt("mb1", Side.BUY, 4, 3, account_id="bob"))
 
     # Must trade
     trades = _trades(ev)
@@ -122,10 +127,13 @@ def test_market_buy_on_empty_book_expires_or_rejects() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
-    ev = e.submit(_pl_mkt("mb1", Side.BUY, 5, 1))
+    ev = e.submit(_pl_mkt("mb1", Side.BUY, 5, 1, account_id="bob"))
     names = _types(ev)
 
     # no trades
@@ -145,12 +153,17 @@ def test_ioc_limit_crosses_then_expires_remainder_and_does_not_rest() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
 
-    ev = e.submit(_pl_limit("ioc1", Side.BUY, 100, 5, 2, tif=TimeInForce.IOC))
+    ev = e.submit(
+        _pl_limit("ioc1", Side.BUY, 100, 5, 2, tif=TimeInForce.IOC, account_id="bob")
+    )
     names = _types(ev)
 
     assert "TradeOccurred" in names
@@ -178,13 +191,18 @@ def test_ioc_limit_that_does_not_cross_expires_entire_order_and_does_not_rest() 
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
     assert e.book.best_ask() == 100
 
-    ev = e.submit(_pl_limit("ioc1", Side.BUY, 90, 1, 2, tif=TimeInForce.IOC))
+    ev = e.submit(
+        _pl_limit("ioc1", Side.BUY, 90, 1, 2, tif=TimeInForce.IOC, account_id="bob")
+    )
     names = _types(ev)
 
     assert "TradeOccurred" not in names
@@ -204,14 +222,19 @@ def test_fok_limit_rejects_if_not_fully_fillable_and_does_not_mutate_book() -> N
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
     e.submit(_pl_limit("a2", Side.SELL, 100, 2, 2))
     assert e.book.best_ask() == 100
 
-    ev = e.submit(_pl_limit("fok1", Side.BUY, 100, 4, 3, tif=TimeInForce.FOK))
+    ev = e.submit(
+        _pl_limit("fok1", Side.BUY, 100, 4, 3, tif=TimeInForce.FOK, account_id="bob")
+    )
     assert len(ev) == 1
     assert isinstance(ev[0], OrderRejected)
     assert "fok" in ev[0].reason.lower() or "fill" in ev[0].reason.lower()
@@ -234,13 +257,18 @@ def test_fok_limit_fills_fully_and_does_not_rest() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
     e.submit(_pl_limit("a2", Side.SELL, 100, 3, 2))
 
-    ev = e.submit(_pl_limit("fok1", Side.BUY, 100, 5, 3, tif=TimeInForce.FOK))
+    ev = e.submit(
+        _pl_limit("fok1", Side.BUY, 100, 5, 3, tif=TimeInForce.FOK, account_id="bob")
+    )
     trades = _trades(ev)
     assert sum(t.qty.lots for t in trades) == 5
     assert e.book.best_ask() is None
@@ -255,12 +283,24 @@ def test_post_only_rejects_if_it_would_cross_and_does_not_trade() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
 
     ev = e.submit(
-        _pl_limit("po1", Side.BUY, 100, 1, 2, tif=TimeInForce.GTC, post_only=True)
+        _pl_limit(
+            "po1",
+            Side.BUY,
+            100,
+            1,
+            2,
+            tif=TimeInForce.GTC,
+            post_only=True,
+            account_id="bob",
+        )
     )
     assert len(ev) == 1
     assert isinstance(ev[0], OrderRejected)
@@ -277,12 +317,24 @@ def test_post_only_rest_if_it_does_not_cross() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
 
     ev = e.submit(
-        _pl_limit("po1", Side.BUY, 90, 1, 2, tif=TimeInForce.GTC, post_only=True)
+        _pl_limit(
+            "po1",
+            Side.BUY,
+            90,
+            1,
+            2,
+            tif=TimeInForce.GTC,
+            post_only=True,
+            account_id="bob",
+        )
     )
     names = _types(ev)
 
@@ -302,12 +354,15 @@ def test_market_sell_partially_fills_then_expires_remainder_and_consumes_bids() 
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("b1", Side.BUY, 100, 2, 1))
 
-    ev = e.submit(_pl_mkt("ms1", Side.SELL, 5, 2))
+    ev = e.submit(_pl_mkt("ms1", Side.SELL, 5, 2, account_id="bob"))
     names = _types(ev)
 
     assert "TradeOccurred" in names
@@ -328,13 +383,18 @@ def test_ioc_limit_partial_fill_expires_only_the_remainder() -> None:
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 2, 1))
     e.submit(_pl_limit("a2", Side.SELL, 110, 10, 2))
 
-    ev = e.submit(_pl_limit("ioc1", Side.BUY, 100, 5, 3, tif=TimeInForce.IOC))
+    ev = e.submit(
+        _pl_limit("ioc1", Side.BUY, 100, 5, 3, tif=TimeInForce.IOC, account_id="bob")
+    )
     names = _types(ev)
 
     assert "TradeOccurred" in names
@@ -356,13 +416,18 @@ def test_fok_limit_not_fillable_due_to_price_constraint_rejects_without_mutation
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 101, 10, 1))
     assert e.book.best_ask() == 101
 
-    ev = e.submit(_pl_limit("fok1", Side.BUY, 100, 5, 2, tif=TimeInForce.FOK))
+    ev = e.submit(
+        _pl_limit("fok1", Side.BUY, 100, 5, 2, tif=TimeInForce.FOK, account_id="bob")
+    )
     assert len(ev) == 1
     assert isinstance(ev[0], OrderRejected)
     assert "fok" in ev[0].reason.lower() or "fill" in ev[0].reason.lower()
@@ -383,13 +448,18 @@ def test_post_only_rejects_if_crossing_even_if_crossing_would_take_multiple_leve
     """
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     e.submit(_pl_limit("a1", Side.SELL, 100, 1, 1))
     e.submit(_pl_limit("a2", Side.SELL, 101, 1, 2))
 
-    ev = e.submit(_pl_limit("po1", Side.BUY, 200, 2, 3, post_only=True))
+    ev = e.submit(
+        _pl_limit("po1", Side.BUY, 200, 2, 3, post_only=True, account_id="bob")
+    )
     assert len(ev) == 1
     assert isinstance(ev[0], OrderRejected)
 
@@ -400,7 +470,10 @@ def test_post_only_rejects_if_crossing_even_if_crossing_would_take_multiple_leve
 def test_duplicate_order_id_rejected_for_market_orders() -> None:
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     ev1 = e.submit(_pl_mkt("m1", Side.BUY, 1, 1))
@@ -416,7 +489,10 @@ def test_duplicate_order_id_rejected_for_market_orders() -> None:
 def test_qty_must_be_positive_for_market_and_limit() -> None:
     e = engine_with_balances(
         INSTR,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     ev1 = e.submit(_pl_mkt("m1", Side.BUY, 0, 1))

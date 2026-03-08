@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import pytest
 
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 from pyvenue.engine.orderbook import OrderBook, RestingOrder
 
 
 def _o(
-    oid: str, instrument: Instrument, side: Side, price: int, qty: int
+    oid: str,
+    instrument: Instrument,
+    side: Side,
+    price: int,
+    qty: int,
+    account_id: str = "alice",
 ) -> RestingOrder:
     return RestingOrder(
         order_id=OrderId(oid),
+        account_id=AccountId(account_id),
         instrument=instrument,
         side=side,
         price=Price(price),
@@ -27,10 +33,12 @@ def test_taker_does_not_rest_before_matching_when_fully_filled() -> None:
     book = OrderBook(inst)
 
     # Maker rests first
-    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=5)) == ([], 5)
+    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=5)) == ([], 5, [])
 
     # Taker crosses and should fully fill immediately
-    fills, remaining = book.place_limit(_o("b1", inst, Side.BUY, price=110, qty=5))
+    fills, remaining, _ = book.place_limit(
+        _o("b1", inst, Side.BUY, price=110, qty=5, account_id="bob")
+    )
     assert [(f.maker_order_id, f.maker_price.ticks, f.qty.lots) for f in fills] == [
         (OrderId("a1"), 100, 5)
     ]
@@ -60,7 +68,7 @@ def test_fully_filled_maker_is_removed_from_orders_by_id() -> None:
     book = OrderBook(inst)
 
     book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=5))
-    book.place_limit(_o("b1", inst, Side.BUY, price=100, qty=5))
+    book.place_limit(_o("b1", inst, Side.BUY, price=100, qty=5, account_id="bob"))
 
     # Both should be gone from the resting set
     assert book.cancel(OrderId("a1")) is False
@@ -97,7 +105,7 @@ def test_cancel_respects_pricelevel_cancel_return_value() -> None:
     book = OrderBook(inst)
 
     # Put a real resting order at 100
-    assert book.place_limit(_o("real", inst, Side.BUY, price=100, qty=1)) == ([], 1)
+    assert book.place_limit(_o("real", inst, Side.BUY, price=100, qty=1)) == ([], 1, [])
 
     # Corrupt: map a different order_id to the same level, but do NOT add it to the level
     book.orders_by_id[OrderId("fake")] = (Side.BUY, 100)
@@ -132,7 +140,7 @@ def test_invariant_match_raises_if_best_price_has_no_level_dict_entry() -> None:
     book = OrderBook(inst)
 
     # Create an ask level at 100
-    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=1)) == ([], 1)
+    assert book.place_limit(_o("a1", inst, Side.SELL, price=100, qty=1)) == ([], 1, [])
     assert book.best_ask() == 100
     assert 100 in book.asks
 
@@ -143,4 +151,4 @@ def test_invariant_match_raises_if_best_price_has_no_level_dict_entry() -> None:
     # Now place a crossing buy: this will try to match against best_ask=100
     # and should raise because the ask level is missing.
     with pytest.raises(RuntimeError):
-        book.place_limit(_o("b1", inst, Side.BUY, price=200, qty=1))
+        book.place_limit(_o("b1", inst, Side.BUY, price=200, qty=1, account_id="bob"))

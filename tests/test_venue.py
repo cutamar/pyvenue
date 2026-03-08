@@ -13,11 +13,17 @@ ETH = Instrument("ETH-USD")
 
 
 def _pl(
-    inst: Instrument, oid: str, side: Side, price: int, qty: int, client_ts_ns: int
+    inst: Instrument,
+    oid: str,
+    side: Side,
+    price: int,
+    qty: int,
+    client_ts_ns: int,
+    account_id: str = "alice",
 ) -> PlaceLimit:
     return PlaceLimit(
         instrument=inst,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         side=side,
         price=Price(price),
@@ -26,10 +32,12 @@ def _pl(
     )
 
 
-def _cx(inst: Instrument, oid: str, client_ts_ns: int) -> Cancel:
+def _cx(
+    inst: Instrument, oid: str, client_ts_ns: int, account_id: str = "alice"
+) -> Cancel:
     return Cancel(
         instrument=inst,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         client_ts_ns=client_ts_ns,
     )
@@ -55,8 +63,14 @@ def test_routes_to_correct_instrument_and_isolates_books() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -103,8 +117,14 @@ def test_global_seq_monotonic_across_instruments() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -121,8 +141,14 @@ def test_trade_occurs_only_within_same_instrument() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -133,7 +159,7 @@ def test_trade_occurs_only_within_same_instrument() -> None:
     v.submit(_pl(ETH, "a1", Side.SELL, 100, 2, 2))
 
     # Cross in BTC only
-    ev = v.submit(_pl(BTC, "b1", Side.BUY, 200, 2, 3))
+    ev = v.submit(_pl(BTC, "b1", Side.BUY, 200, 2, 3, account_id="bob"))
     trades = _trades(ev)
 
     assert (
@@ -154,8 +180,14 @@ def test_replay_reconstructs_multiple_books() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -164,11 +196,11 @@ def test_replay_reconstructs_multiple_books() -> None:
 
     # BTC: maker rests, then partially filled
     all_events.extend(v.submit(_pl(BTC, "m1", Side.SELL, 100, 5, 1)))
-    all_events.extend(v.submit(_pl(BTC, "t1", Side.BUY, 200, 2, 2)))
+    all_events.extend(v.submit(_pl(BTC, "t1", Side.BUY, 200, 2, 2, account_id="bob")))
 
     # ETH: resting bid, then canceled
-    all_events.extend(v.submit(_pl(ETH, "b1", Side.BUY, 50, 1, 3)))
-    all_events.extend(v.submit(_cx(ETH, "b1", 4)))
+    all_events.extend(v.submit(_pl(ETH, "b1", Side.BUY, 50, 1, 3, account_id="bob")))
+    all_events.extend(v.submit(_cx(ETH, "b1", 4, account_id="bob")))
 
     r = Venue.replay(instruments=[BTC, ETH], events=all_events)
 
@@ -190,8 +222,14 @@ def test_cancel_routes_to_correct_instrument_only() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -218,8 +256,14 @@ def test_order_ids_can_collide_across_instruments() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -241,8 +285,14 @@ def test_cancel_unknown_order_rejected_per_instrument() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 
@@ -265,8 +315,14 @@ def test_replay_rejects_events_for_unconfigured_instrument() -> None:
     v = venue_with_balances(
         [BTC, ETH],
         {
-            BTC: {"alice": {"USD": 999999, "BTC": 999999}},
-            ETH: {"alice": {"USD": 999999, "ETH": 999999}},
+            BTC: {
+                "alice": {"USD": 999999, "BTC": 999999},
+                "bob": {"USD": 999999, "BTC": 999999},
+            },
+            ETH: {
+                "alice": {"USD": 999999, "ETH": 999999},
+                "bob": {"USD": 999999, "ETH": 999999},
+            },
         },
     )
 

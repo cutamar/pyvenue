@@ -9,11 +9,17 @@ from utils import NextMeta, engine_with_balances
 
 
 def _pl(
-    inst: Instrument, oid: str, side: Side, price: int, qty: int, client_ts_ns: int
+    inst: Instrument,
+    oid: str,
+    side: Side,
+    price: int,
+    qty: int,
+    client_ts_ns: int,
+    account_id: str = "alice",
 ) -> PlaceLimit:
     return PlaceLimit(
         instrument=inst,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         side=side,
         price=Price(price),
@@ -22,10 +28,12 @@ def _pl(
     )
 
 
-def _cx(inst: Instrument, oid: str, client_ts_ns: int) -> Cancel:
+def _cx(
+    inst: Instrument, oid: str, client_ts_ns: int, account_id: str = "alice"
+) -> Cancel:
     return Cancel(
         instrument=inst,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         client_ts_ns=client_ts_ns,
     )
@@ -55,7 +63,10 @@ def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     # Maker rests: sell 5 @ 100
@@ -65,7 +76,7 @@ def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
     assert _remaining_lots(m1) == 5
 
     # Taker crosses: buy 2 @ 200 -> fills 2 lots against m1
-    e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1))
+    e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1, account_id="bob"))
 
     m1 = e.state.orders[OrderId("m1")]
     t1 = e.state.orders[OrderId("t1")]
@@ -78,7 +89,7 @@ def test_state_updates_remaining_and_status_for_maker_and_taker() -> None:
     assert t1.status == OrderStatus.FILLED
 
     # Another taker fills remaining 3 -> maker becomes FILLED
-    e.submit(_pl(inst, "t2", Side.BUY, 200, 3, 1))
+    e.submit(_pl(inst, "t2", Side.BUY, 200, 3, 1, account_id="bob"))
     m1 = e.state.orders[OrderId("m1")]
     assert _remaining_lots(m1) == 0
     assert m1.status == OrderStatus.FILLED
@@ -88,13 +99,16 @@ def test_replay_reconstructs_same_state() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     all_events = e.log.all()
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
-    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1)))
-    all_events.extend(e.submit(_pl(inst, "t2", Side.BUY, 200, 3, 1)))
+    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1, account_id="bob")))
+    all_events.extend(e.submit(_pl(inst, "t2", Side.BUY, 200, 3, 1, account_id="bob")))
 
     snap1 = _snapshot(e)
 
@@ -115,7 +129,10 @@ def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     all_events = e.log.all()
@@ -123,7 +140,7 @@ def test_replay_rebuilds_resting_book_levels_and_orders() -> None:
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
 
     # Partial fill m1 with taker buys: buy 2@200
-    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1)))
+    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1, account_id="bob")))
 
     # After these, m1 should still be resting (remaining 3)
     assert e.book.best_ask() == 100
@@ -153,7 +170,10 @@ def test_replay_book_allows_matching_after_replay() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     all_events = e.log.all()
@@ -168,7 +188,7 @@ def test_replay_book_allows_matching_after_replay() -> None:
     )
 
     # Now cross it with a taker buy
-    ev = r.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1))
+    ev = r.submit(_pl(inst, "t1", Side.BUY, 200, 2, 1, account_id="bob"))
     names = _types(ev)
 
     assert "TradeOccurred" in names
@@ -190,14 +210,17 @@ def test_replay_book_applies_trade_occurred_to_maker_remaining() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     all_events = e.log.all()
     # maker rests 5@100
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 5, 1)))
     # taker buys 2, so maker remaining should become 3
-    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))
+    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2, account_id="bob")))
 
     r = Engine.replay(
         instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
@@ -218,12 +241,17 @@ def test_replay_book_trade_fully_filled_maker_is_not_cancelable() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     all_events = e.log.all()
     all_events.extend(e.submit(_pl(inst, "m1", Side.SELL, 100, 2, 1)))
-    all_events.extend(e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2)))  # fully fills m1
+    all_events.extend(
+        e.submit(_pl(inst, "t1", Side.BUY, 200, 2, 2, account_id="bob"))
+    )  # fully fills m1
 
     r = Engine.replay(
         instrument=inst, events=all_events, next_meta=NextMeta(), rebuild_book=True
@@ -242,7 +270,10 @@ def test_replay_book_applies_order_canceled_removes_resting_order() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     all_events = e.log.all()

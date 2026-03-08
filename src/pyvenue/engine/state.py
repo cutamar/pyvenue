@@ -95,44 +95,56 @@ class EngineState:
                 (self.fee_schedule.maker_bps * trade.qty.lots * trade.price.ticks)
                 / 10_000
             )
+            available = max(
+                0, self.accounts[(maker_order.account_id, self.fee_schedule.fee_asset)]
+            )
+            actual_fee = min(fee, available)
             logger.debug(
                 "Decreasing fee from maker account",
                 account=maker_order.account_id,
                 asset=self.fee_schedule.fee_asset,
-                qty=fee,
+                qty=actual_fee,
             )
-            self.accounts[(maker_order.account_id, self.fee_schedule.fee_asset)] -= fee
+            self.accounts[(maker_order.account_id, self.fee_schedule.fee_asset)] -= (
+                actual_fee
+            )
             logger.debug(
                 "Add fee to fee account",
                 account=self.fee_schedule.fee_account,
                 asset=self.fee_schedule.fee_asset,
-                qty=fee,
+                qty=actual_fee,
             )
             self.accounts[
                 (self.fee_schedule.fee_account, self.fee_schedule.fee_asset)
-            ] += fee
+            ] += actual_fee
         if trade.taker_order_id in self.orders:
             taker_order = self.orders[trade.taker_order_id]
             fee = math.ceil(
                 (self.fee_schedule.taker_bps * trade.qty.lots * trade.price.ticks)
                 / 10_000
             )
+            available = max(
+                0, self.accounts[(taker_order.account_id, self.fee_schedule.fee_asset)]
+            )
+            actual_fee = min(fee, available)
             logger.debug(
                 "Decreasing fee from taker account",
                 account=taker_order.account_id,
                 asset=self.fee_schedule.fee_asset,
-                qty=fee,
+                qty=actual_fee,
             )
-            self.accounts[(taker_order.account_id, self.fee_schedule.fee_asset)] -= fee
+            self.accounts[(taker_order.account_id, self.fee_schedule.fee_asset)] -= (
+                actual_fee
+            )
             logger.debug(
                 "Add fee to fee account",
                 account=self.fee_schedule.fee_account,
                 asset=self.fee_schedule.fee_asset,
-                qty=fee,
+                qty=actual_fee,
             )
             self.accounts[
                 (self.fee_schedule.fee_account, self.fee_schedule.fee_asset)
-            ] += fee
+            ] += actual_fee
 
     def apply_all(self, events: list[Event]) -> None:
         for e in events:
@@ -183,46 +195,46 @@ class EngineState:
                 logger.debug(
                     "Decreasing account {account} for asset {asset} by {qty}",
                     account=record.account_id,
-                    asset=self.base_asset,
-                    qty=total_price,
-                    is_maker=is_maker,
-                )
-                if is_maker:
-                    self.accounts_held[(record.account_id, self.base_asset)] -= (
-                        total_price
-                    )
-                else:
-                    self.accounts[(record.account_id, self.base_asset)] -= total_price
-                logger.debug(
-                    "Increasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
                     asset=self.quote_asset,
-                    qty=event.qty.lots,
-                    is_maker=is_maker,
-                )
-                self.accounts[(record.account_id, self.quote_asset)] += event.qty.lots
-            else:
-                logger.debug(
-                    "Increasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
-                    asset=self.base_asset,
                     qty=total_price,
-                    is_maker=is_maker,
-                )
-                self.accounts[(record.account_id, self.base_asset)] += total_price
-                logger.debug(
-                    "Decreasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
-                    asset=self.quote_asset,
-                    qty=event.qty.lots,
                     is_maker=is_maker,
                 )
                 if is_maker:
                     self.accounts_held[(record.account_id, self.quote_asset)] -= (
+                        total_price
+                    )
+                else:
+                    self.accounts[(record.account_id, self.quote_asset)] -= total_price
+                logger.debug(
+                    "Increasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=self.base_asset,
+                    qty=event.qty.lots,
+                    is_maker=is_maker,
+                )
+                self.accounts[(record.account_id, self.base_asset)] += event.qty.lots
+            else:
+                logger.debug(
+                    "Increasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=self.quote_asset,
+                    qty=total_price,
+                    is_maker=is_maker,
+                )
+                self.accounts[(record.account_id, self.quote_asset)] += total_price
+                logger.debug(
+                    "Decreasing account {account} for asset {asset} by {qty}",
+                    account=record.account_id,
+                    asset=self.base_asset,
+                    qty=event.qty.lots,
+                    is_maker=is_maker,
+                )
+                if is_maker:
+                    self.accounts_held[(record.account_id, self.base_asset)] -= (
                         event.qty.lots
                     )
                 else:
-                    self.accounts[(record.account_id, self.quote_asset)] -= (
+                    self.accounts[(record.account_id, self.base_asset)] -= (
                         event.qty.lots
                     )
         self.process_trade_fees(event)

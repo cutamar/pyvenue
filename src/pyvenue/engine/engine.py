@@ -50,8 +50,8 @@ class Engine:
     def __post_init__(self) -> None:
         self.book = OrderBook(self.instrument)
         assets = self.resolve_assets(self.instrument)
-        base_asset = assets[Side.BUY]
-        quote_asset = assets[Side.SELL]
+        base_asset = assets[Side.SELL]
+        quote_asset = assets[Side.BUY]
         self.state = EngineState(
             base_asset=base_asset,
             quote_asset=quote_asset,
@@ -80,7 +80,7 @@ class Engine:
     @staticmethod
     def resolve_assets(instrument: Instrument):
         base, quote = instrument.split("-")
-        return {Side.SELL: Asset(base), Side.BUY: Asset(quote)}
+        return {Side.BUY: Asset(quote), Side.SELL: Asset(base)}
 
     def submit(self, command: Command) -> list[Event]:
         self.logger.debug("Submitting command", command=command)
@@ -163,6 +163,32 @@ class Engine:
                 self._reject(command.instrument, command.order_id, "duplicate order_id")
             ]
         else:
+            if command.side == Side.BUY:
+                cost = self.book.compute_market_quote_cost(command.qty.lots)
+                asset = self.resolve_assets(command.instrument)[Side.BUY]
+                if cost > self.state.available(command.account_id, asset):
+                    self.logger.warning(
+                        "PlaceMarket command rejected: insufficient funds",
+                        command=command,
+                    )
+                    return [
+                        self._reject(
+                            command.instrument, command.order_id, "insufficient funds"
+                        )
+                    ]
+            else:
+                asset = self.resolve_assets(command.instrument)[Side.SELL]
+                if command.qty.lots > self.state.available(command.account_id, asset):
+                    self.logger.warning(
+                        "PlaceMarket command rejected: insufficient funds",
+                        command=command,
+                    )
+                    return [
+                        self._reject(
+                            command.instrument, command.order_id, "insufficient funds"
+                        )
+                    ]
+
             seq, ts = self.next_meta()
             self.logger.debug("PlaceMarket seq and ts", seq=seq, ts=ts)
 
@@ -181,9 +207,10 @@ class Engine:
                     qty=command.qty,
                 )
             ]
-            fill_events, remaining = self.book.place_limit(
+            fill_events, remaining, cancels = self.book.place_limit(
                 RestingOrder(
                     order_id=command.order_id,
+                    account_id=command.account_id,
                     instrument=command.instrument,
                     side=command.side,
                     price=price,
@@ -191,6 +218,29 @@ class Engine:
                 ),
                 rest=False,
             )
+            for canceled_id in cancels:
+                record = self.state.orders[canceled_id]
+                asset = self.resolve_assets(record.instrument)[record.side]
+                seq, ts = self.next_meta()
+                events.append(
+                    OrderCanceled(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        order_id=canceled_id,
+                    )
+                )
+                seq, ts = self.next_meta()
+                events.append(
+                    FundsReleased(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        account_id=record.account_id,
+                        asset=asset,
+                        amount=self.get_order_amount(record),
+                    )
+                )
             for fill_event in fill_events:
                 seq, ts = self.next_meta()
                 events.append(
@@ -254,17 +304,21 @@ class Engine:
             ]
         else:
             if command.post_only:
-                crosses = False
-                if command.side == Side.BUY:
-                    best_ask = self.book.best_ask()
-                    if best_ask is not None and command.price.ticks >= best_ask:
-                        crosses = True
-                elif command.side == Side.SELL:
-                    best_bid = self.book.best_bid()
-                    if best_bid is not None and command.price.ticks <= best_bid:
-                        crosses = True
+                if command.tif != TimeInForce.GTC:
+                    self.logger.warning(
+                        "PlaceLimit rejected: post-only must be GTC", command=command
+                    )
+                    return [
+                        self._reject(
+                            command.instrument,
+                            command.order_id,
+                            "post-only order must be GTC",
+                        )
+                    ]
 
-                if crosses:
+                if self.book.can_match(
+                    command.account_id, command.side, command.price.ticks, 1
+                ):
                     self.logger.warning(
                         "PlaceLimit rejected: post-only would cross", command=command
                     )
@@ -280,7 +334,7 @@ class Engine:
             self.logger.debug("PlaceLimit seq and ts", seq=seq, ts=ts)
 
             if command.tif == TimeInForce.FOK and not self.book.can_match(
-                command.side, command.price.ticks, command.qty.lots
+                command.account_id, command.side, command.price.ticks, command.qty.lots
             ):
                 return [
                     self._reject(
@@ -304,9 +358,10 @@ class Engine:
             ]
 
             rest = command.tif == TimeInForce.GTC
-            fill_events, remaining = self.book.place_limit(
+            fill_events, remaining, cancels = self.book.place_limit(
                 RestingOrder(
                     order_id=command.order_id,
+                    account_id=command.account_id,
                     instrument=command.instrument,
                     side=command.side,
                     price=command.price,
@@ -314,6 +369,29 @@ class Engine:
                 ),
                 rest=rest,
             )
+            for canceled_id in cancels:
+                record = self.state.orders[canceled_id]
+                asset = self.resolve_assets(record.instrument)[record.side]
+                seq, ts = self.next_meta()
+                events.append(
+                    OrderCanceled(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        order_id=canceled_id,
+                    )
+                )
+                seq, ts = self.next_meta()
+                events.append(
+                    FundsReleased(
+                        seq=seq,
+                        ts_ns=ts,
+                        instrument=command.instrument,
+                        account_id=record.account_id,
+                        asset=asset,
+                        amount=self.get_order_amount(record),
+                    )
+                )
             for fill_event in fill_events:
                 seq, ts = self.next_meta()
                 events.append(
@@ -347,6 +425,7 @@ class Engine:
                             seq=seq,
                             ts_ns=ts,
                             instrument=command.instrument,
+                            account_id=command.account_id,
                             order_id=command.order_id,
                             side=command.side,
                             price=command.price,
@@ -378,6 +457,9 @@ class Engine:
             return [
                 self._reject(command.instrument, command.order_id, "unknown order_id")
             ]
+        if record.account_id != command.account_id:
+            self.logger.warning("Cancel command rejected: forbidden", command=command)
+            return [self._reject(command.instrument, command.order_id, "forbidden")]
         if record.status != OrderStatus.ACTIVE:
             self.logger.warning(
                 "Cancel command rejected: order not cancelable", command=command
@@ -416,7 +498,7 @@ class Engine:
                 seq=seq,
                 ts_ns=ts,
                 instrument=command.instrument,
-                account_id=command.account_id,
+                account_id=record.account_id,
                 asset=asset,
                 amount=self.get_order_amount(record),
             )

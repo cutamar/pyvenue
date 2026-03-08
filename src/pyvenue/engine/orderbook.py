@@ -11,7 +11,7 @@ from pyvenue.domain.events import (
     OrderRested,
     TradeOccurred,
 )
-from pyvenue.domain.types import Instrument, OrderId, Price, Qty, Side
+from pyvenue.domain.types import AccountId, Instrument, OrderId, Price, Qty, Side
 
 logger = structlog.get_logger(__name__)
 
@@ -19,6 +19,7 @@ logger = structlog.get_logger(__name__)
 @dataclass(slots=True)
 class RestingOrder:
     order_id: OrderId
+    account_id: AccountId
     instrument: Instrument
     side: Side
     price: Price
@@ -129,6 +130,7 @@ class OrderBook:
             self._rest(
                 RestingOrder(
                     order_id=event.order_id,
+                    account_id=event.account_id,
                     instrument=event.instrument,
                     side=event.side,
                     price=event.price,
@@ -193,13 +195,15 @@ class OrderBook:
 
     def place_limit(
         self, order: RestingOrder, rest: bool = True
-    ) -> tuple[list[Fill], int]:
+    ) -> tuple[list[Fill], int, list[OrderId]]:
         self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
         if order.instrument != self.instrument:
             raise ValueError("Order instrument does not match book instrument")
         price = order.price.ticks
-        fills, remaining = self._match(order.side, price, order.remaining.lots)
+        fills, remaining, cancels = self._match(
+            order.account_id, order.side, price, order.remaining.lots
+        )
         if remaining > 0:
             # place remaining order
             order.remaining = Qty(remaining)
@@ -207,7 +211,7 @@ class OrderBook:
                 self._rest(order)
         self.logger.debug("Limit order placed in the book", remaining=remaining)
         self._log_book()
-        return fills, remaining
+        return fills, remaining, cancels
 
     def cancel(self, order_id: OrderId) -> bool:
         self._log_book()
@@ -292,11 +296,12 @@ class OrderBook:
 
     def can_match(
         self,
+        taker_account_id: AccountId,
         taker_side: Side,
         taker_price_ticks: int,
         taker_qty_lots: int,
     ) -> bool:
-        """Check if a taker order can be fully filled immediately."""
+        """Check if a taker order can be fully filled immediately by non-self orders."""
 
         # Iterate through levels (simulated)
         # Note: we need to iterate in price priority order
@@ -328,8 +333,11 @@ class OrderBook:
             if level is None:
                 continue
 
-            # Sum up qty in this level
+            # Sum up qty in this level excluding self-orders
             level_qty = level.total_qty
+            for order in level.orders.values():
+                if order.account_id == taker_account_id:
+                    level_qty -= order.remaining.lots
 
             if level_qty >= qty_to_fill:
                 return True
@@ -338,12 +346,28 @@ class OrderBook:
 
         return qty_to_fill <= 0
 
+    def compute_market_quote_cost(self, qty_lots: int) -> int:
+        """Calculate the quote asset cost to fully fill a market buy of qty_lots against asks."""
+        cost = 0
+        rem = qty_lots
+        for p in self.ask_prices:
+            level = self.asks.get(p)
+            if level is None:
+                continue
+            fill = min(rem, level.total_qty)
+            cost += fill * p
+            rem -= fill
+            if rem <= 0:
+                break
+        return cost
+
     def _match(
         self,
+        taker_account_id: AccountId,
         taker_side: Side,
         taker_price_ticks: int,
         taker_qty_lots: int,
-    ) -> tuple[list[Fill], int]:
+    ) -> tuple[list[Fill], int, list[OrderId]]:
         if taker_side == Side.BUY:
             maker_side = Side.SELL
             get_best_opp = self.best_ask
@@ -354,6 +378,7 @@ class OrderBook:
             raise ValueError(f"Invalid side: {taker_side}")
 
         fills = []
+        cancels = []
 
         while taker_qty_lots > 0:
             best_opp_price_ticks = get_best_opp()
@@ -369,12 +394,15 @@ class OrderBook:
 
             # Match against this level until empty or taker filled
 
-            maker_order = maker_level.peek_oldest()
-            while taker_qty_lots > 0 and maker_order is not None:
-                if maker_order.remaining.lots <= 0:
-                    # Should not happen if logic is correct, but for safety
-                    maker_level.pop_oldest()
-                    maker_order = maker_level.peek_oldest()
+            for maker_order in list(maker_level.orders.values()):
+                if taker_qty_lots <= 0:
+                    break
+                if maker_order.account_id == taker_account_id:
+                    # Self-trade prevention: Cancel resting maker order
+                    cancels.append(maker_order.order_id)
+                    maker_level.orders.pop(maker_order.order_id, None)
+                    self.orders_by_id.pop(maker_order.order_id, None)
+                    maker_level.total_qty -= maker_order.remaining.lots
                     continue
 
                 fill_qty_lots = min(taker_qty_lots, maker_order.remaining.lots)
@@ -390,15 +418,11 @@ class OrderBook:
                 maker_level.total_qty -= fill_qty_lots
 
                 if maker_order.remaining.lots == 0:
-                    maker_order = maker_level.pop_oldest()
+                    maker_level.orders.pop(maker_order.order_id, None)
                     self.orders_by_id.pop(maker_order.order_id, None)
-                    # We modified the book, so we need to peek again
-                    maker_order = maker_level.peek_oldest()
-                else:
-                    # Taker fully filled, maker has remaining
-                    pass
 
             # If level is empty, remove it
-            self._remove_level_if_empty(maker_side, best_opp_price_ticks)
+            if not maker_level.orders:
+                self._remove_level_if_empty(maker_side, best_opp_price_ticks)
 
-        return fills, taker_qty_lots
+        return fills, taker_qty_lots, cancels

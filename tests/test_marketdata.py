@@ -13,10 +13,11 @@ def _pl(
     price_ticks: int,
     qty_lots: int,
     client_ts_ns: int,
+    account_id: str = "alice",
 ) -> PlaceLimit:
     return PlaceLimit(
         instrument=inst,
-        account_id=AccountId("alice"),
+        account_id=AccountId(account_id),
         order_id=OrderId(oid),
         side=side,
         price=Price(price_ticks),
@@ -42,7 +43,10 @@ def test_bbo_emitted_on_first_bid() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     events = e.submit(_pl(inst, "b1", Side.BUY, 100, 1, 1))
@@ -58,7 +62,10 @@ def test_bbo_emitted_on_first_ask() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     events = e.submit(_pl(inst, "a1", Side.SELL, 101, 1, 1))
@@ -73,7 +80,10 @@ def test_bbo_updates_when_best_ask_level_removed_by_trade() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     # Rest two asks: best ask is 100, next is 105
@@ -81,7 +91,7 @@ def test_bbo_updates_when_best_ask_level_removed_by_trade() -> None:
     e.submit(_pl(inst, "a2", Side.SELL, 105, 1, 1))
 
     # Crossing buy consumes the 100 level entirely -> best ask becomes 105
-    events = e.submit(_pl(inst, "b1", Side.BUY, 200, 1, 1))
+    events = e.submit(_pl(inst, "b1", Side.BUY, 200, 1, 1, account_id="bob"))
     bbo = _bbo(events)
 
     assert len(bbo) == 1
@@ -92,7 +102,10 @@ def test_bbo_updates_when_best_bid_level_removed_by_cancel() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     # Rest two bids: best bid is 110
@@ -110,7 +123,10 @@ def test_bbo_not_emitted_when_top_of_book_unchanged() -> None:
     inst = Instrument("BTC-USD")
     e = engine_with_balances(
         inst,
-        {"alice": {"USD": 999999, "BTC": 999999}},
+        {
+            "alice": {"USD": 999999, "BTC": 999999},
+            "bob": {"USD": 999999, "BTC": 999999},
+        },
     )
 
     # Establish top-of-book with best bid 100

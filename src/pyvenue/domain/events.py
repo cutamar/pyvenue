@@ -66,6 +66,7 @@ class OrderRested:
     seq: int
     ts_ns: int
     instrument: Instrument
+    account_id: AccountId
     order_id: OrderId
     side: Side
     price: Price
