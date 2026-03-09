@@ -346,15 +346,21 @@ class OrderBook:
 
         return qty_to_fill <= 0
 
-    def compute_market_quote_cost(self, qty_lots: int) -> int:
-        """Calculate the quote asset cost to fully fill a market buy of qty_lots against asks."""
+    def compute_market_quote_cost(self, qty_lots: int, account_id: AccountId) -> int:
+        """Calculate the quote asset cost to fully fill a market buy of qty_lots against non-self asks."""
         cost = 0
         rem = qty_lots
         for p in self.ask_prices:
             level = self.asks.get(p)
             if level is None:
                 continue
-            fill = min(rem, level.total_qty)
+
+            level_qty = level.total_qty
+            for order in level.orders.values():
+                if order.account_id == account_id:
+                    level_qty -= order.remaining.lots
+
+            fill = min(rem, level_qty)
             cost += fill * p
             rem -= fill
             if rem <= 0:

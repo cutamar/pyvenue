@@ -164,7 +164,9 @@ class Engine:
             ]
         else:
             if command.side == Side.BUY:
-                cost = self.book.compute_market_quote_cost(command.qty.lots)
+                cost = self.book.compute_market_quote_cost(
+                    command.qty.lots, command.account_id
+                )
                 asset = self.resolve_assets(command.instrument)[Side.BUY]
                 if cost > self.state.available(command.account_id, asset):
                     self.logger.warning(
@@ -416,7 +418,11 @@ class Engine:
                             instrument=command.instrument,
                             account_id=command.account_id,
                             asset=self.resolve_assets(command.instrument)[command.side],
-                            amount=self.get_order_amount(command),
+                            amount=Qty(
+                                remaining * command.price.ticks
+                                if command.side == Side.BUY
+                                else remaining
+                            ),
                         )
                     )
                     seq, ts = self.next_meta()
