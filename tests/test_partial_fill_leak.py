@@ -3,6 +3,7 @@ from __future__ import annotations
 from pyvenue.domain.commands import PlaceLimit
 from pyvenue.domain.types import (
     AccountId,
+    Asset,
     Instrument,
     OrderId,
     Price,
@@ -59,8 +60,8 @@ def test_partial_fill_reservation_leak():
     # Total held should be 100 USD.
     e.submit(_pl_limit("b1", Side.BUY, 100, 6, 2, account_id="bob"))
 
-    bob_avail = e.state.available(AccountId("bob"), "USD")
-    bob_held = e.state.accounts_held.get((AccountId("bob"), "USD"), 0)
+    bob_avail = e.state.available(AccountId("bob"), Asset("USD"))
+    bob_held = e.state.accounts_held.get((AccountId("bob"), Asset("USD")), 0)
 
     print(f"Bob Available: {bob_avail}")
     print(f"Bob Held: {bob_held}")
