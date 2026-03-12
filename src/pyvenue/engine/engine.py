@@ -30,7 +30,7 @@ from pyvenue.domain.types import (
     Side,
     TimeInForce,
 )
-from pyvenue.engine.orderbook import OrderBook, RestingOrder
+from pyvenue.engine.orderbook import Fill, OrderBook, RestingOrder
 from pyvenue.engine.state import EngineState, OrderRecord, OrderStatus
 from pyvenue.infra import EventLog
 
@@ -110,6 +110,51 @@ class Engine:
         for e in events:
             self.log.append(e)
             self.state.apply(e)
+        return events
+
+    def _process_match_outcomes(
+        self,
+        command: PlaceLimit | PlaceMarket,
+        fill_events: list[Fill],
+        cancels: list[OrderId],
+    ) -> list[Event]:
+        events: list[Event] = []
+        for canceled_id in cancels:
+            record = self.state.orders[canceled_id]
+            asset = self.resolve_assets(record.instrument)[record.side]
+            seq, ts = self.next_meta()
+            events.append(
+                OrderCanceled(
+                    seq=seq,
+                    ts_ns=ts,
+                    instrument=command.instrument,
+                    order_id=canceled_id,
+                )
+            )
+            seq, ts = self.next_meta()
+            events.append(
+                FundsReleased(
+                    seq=seq,
+                    ts_ns=ts,
+                    instrument=command.instrument,
+                    account_id=record.account_id,
+                    asset=asset,
+                    amount=self.get_order_amount(record),
+                )
+            )
+        for fill_event in fill_events:
+            seq, ts = self.next_meta()
+            events.append(
+                TradeOccurred(
+                    seq=seq,
+                    ts_ns=ts,
+                    instrument=command.instrument,
+                    taker_order_id=command.order_id,
+                    maker_order_id=fill_event.maker_order_id,
+                    qty=fill_event.qty,
+                    price=fill_event.maker_price,
+                )
+            )
         return events
 
     def get_order_amount(self, command: PlaceLimit | OrderRecord) -> Qty:
@@ -220,42 +265,9 @@ class Engine:
                 ),
                 rest=False,
             )
-            for canceled_id in cancels:
-                record = self.state.orders[canceled_id]
-                asset = self.resolve_assets(record.instrument)[record.side]
-                seq, ts = self.next_meta()
-                events.append(
-                    OrderCanceled(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        order_id=canceled_id,
-                    )
-                )
-                seq, ts = self.next_meta()
-                events.append(
-                    FundsReleased(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        account_id=record.account_id,
-                        asset=asset,
-                        amount=self.get_order_amount(record),
-                    )
-                )
-            for fill_event in fill_events:
-                seq, ts = self.next_meta()
-                events.append(
-                    TradeOccurred(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        taker_order_id=command.order_id,
-                        maker_order_id=fill_event.maker_order_id,
-                        qty=fill_event.qty,
-                        price=fill_event.maker_price,
-                    )
-                )
+
+            events.extend(self._process_match_outcomes(command, fill_events, cancels))
+
             if remaining > 0:
                 seq, ts = self.next_meta()
                 events.append(
@@ -371,42 +383,8 @@ class Engine:
                 ),
                 rest=rest,
             )
-            for canceled_id in cancels:
-                record = self.state.orders[canceled_id]
-                asset = self.resolve_assets(record.instrument)[record.side]
-                seq, ts = self.next_meta()
-                events.append(
-                    OrderCanceled(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        order_id=canceled_id,
-                    )
-                )
-                seq, ts = self.next_meta()
-                events.append(
-                    FundsReleased(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        account_id=record.account_id,
-                        asset=asset,
-                        amount=self.get_order_amount(record),
-                    )
-                )
-            for fill_event in fill_events:
-                seq, ts = self.next_meta()
-                events.append(
-                    TradeOccurred(
-                        seq=seq,
-                        ts_ns=ts,
-                        instrument=command.instrument,
-                        taker_order_id=command.order_id,
-                        maker_order_id=fill_event.maker_order_id,
-                        qty=fill_event.qty,
-                        price=fill_event.maker_price,
-                    )
-                )
+
+            events.extend(self._process_match_outcomes(command, fill_events, cancels))
 
             if remaining > 0:
                 if command.tif == TimeInForce.GTC:

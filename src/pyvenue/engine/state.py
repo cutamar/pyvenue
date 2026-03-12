@@ -191,52 +191,26 @@ class EngineState:
                 record.status = OrderStatus.FILLED
 
             total_price = event.qty.lots * event.price.ticks
+
             if record.side == Side.BUY:
-                logger.debug(
-                    "Decreasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
-                    asset=self.quote_asset,
-                    qty=total_price,
-                    is_maker=is_maker,
-                )
-                if is_maker:
-                    self.accounts_held[(record.account_id, self.quote_asset)] -= (
-                        total_price
-                    )
-                else:
-                    self.accounts[(record.account_id, self.quote_asset)] -= total_price
-                logger.debug(
-                    "Increasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
-                    asset=self.base_asset,
-                    qty=event.qty.lots,
-                    is_maker=is_maker,
-                )
-                self.accounts[(record.account_id, self.base_asset)] += event.qty.lots
+                pay_asset, get_asset = self.quote_asset, self.base_asset
+                pay_qty, get_qty = total_price, event.qty.lots
             else:
-                logger.debug(
-                    "Increasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
-                    asset=self.quote_asset,
-                    qty=total_price,
-                    is_maker=is_maker,
-                )
-                self.accounts[(record.account_id, self.quote_asset)] += total_price
-                logger.debug(
-                    "Decreasing account {account} for asset {asset} by {qty}",
-                    account=record.account_id,
-                    asset=self.base_asset,
-                    qty=event.qty.lots,
-                    is_maker=is_maker,
-                )
-                if is_maker:
-                    self.accounts_held[(record.account_id, self.base_asset)] -= (
-                        event.qty.lots
-                    )
-                else:
-                    self.accounts[(record.account_id, self.base_asset)] -= (
-                        event.qty.lots
-                    )
+                pay_asset, get_asset = self.base_asset, self.quote_asset
+                pay_qty, get_qty = event.qty.lots, total_price
+
+            logger.debug(
+                "Trade ledger update", account=record.account_id, is_maker=is_maker
+            )
+
+            # Everyone gets what they bought into their available balance
+            self.accounts[(record.account_id, get_asset)] += get_qty
+
+            # Takers pay from available, Makers pay from reserved/held
+            if is_maker:
+                self.accounts_held[(record.account_id, pay_asset)] -= pay_qty
+            else:
+                self.accounts[(record.account_id, pay_asset)] -= pay_qty
         self.process_trade_fees(event)
 
         self._log_state()
