@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from enum import Enum
-from functools import singledispatchmethod
 
 from structlog import get_logger
 
@@ -150,12 +149,32 @@ class EngineState:
         for e in events:
             self.apply(e)
 
-    @singledispatchmethod
     def apply(self, event: Event) -> None:
-        raise TypeError(f"Unsupported event: {type(event)!r}")
+        t = type(event)
+        if t is OrderAccepted:
+            self._apply_order_accepted(event)
+        elif t is TradeOccurred:
+            self._apply_trade_occurred(event)
+        elif t is OrderCanceled:
+            self._apply_order_canceled(event)
+        elif t is OrderExpired:
+            self._apply_order_expired(event)
+        elif t is OrderRested:
+            self._apply_order_rested(event)
+        elif t is FundsReserved:
+            self._apply_funds_reserved(event)
+        elif t is FundsReleased:
+            self._apply_funds_released(event)
+        elif t is FundsCredited:
+            self._apply_funds_credited(event)
+        elif t is OrderRejected:
+            self._apply_order_rejected(event)
+        elif t is TopOfBookChanged:
+            self._apply_top_of_book_changed(event)
+        else:
+            raise TypeError(f"Unsupported event: {t!r}")
 
-    @apply.register
-    def _(self, event: OrderAccepted) -> None:
+    def _apply_order_accepted(self, event: OrderAccepted) -> None:
         logger.debug("Applying order accepted event", trade_event=event)
         self.orders[event.order_id] = OrderRecord(
             instrument=event.instrument,
@@ -169,16 +188,14 @@ class EngineState:
         )
         self._log_state()
 
-    @apply.register
-    def _(self, event: OrderCanceled) -> None:
+    def _apply_order_canceled(self, event: OrderCanceled) -> None:
         logger.debug("Applying order canceled event", trade_event=event)
         record = self.orders.get(event.order_id)
         if record is not None:
             record.status = OrderStatus.CANCELED
         self._log_state()
 
-    @apply.register
-    def _(self, event: TradeOccurred) -> None:
+    def _apply_trade_occurred(self, event: TradeOccurred) -> None:
         logger.debug("Applying trade occurred event", trade_event=event)
         for order_id in (event.taker_order_id, event.maker_order_id):
             record = self.orders.get(order_id)
@@ -215,42 +232,35 @@ class EngineState:
 
         self._log_state()
 
-    @apply.register
-    def _(self, event: OrderExpired) -> None:
+    def _apply_order_expired(self, event: OrderExpired) -> None:
         logger.debug("Applying order expired event", trade_event=event)
         record = self.orders.get(event.order_id)
         if record is not None:
             record.status = OrderStatus.EXPIRED
         self._log_state()
 
-    @apply.register
-    def _(self, event: OrderRejected) -> None:
+    def _apply_order_rejected(self, event: OrderRejected) -> None:
         # nothing to do in this case
         logger.debug("Applying order rejected event", trade_event=event)
 
-    @apply.register
-    def _(self, event: TopOfBookChanged) -> None:
+    def _apply_top_of_book_changed(self, event: TopOfBookChanged) -> None:
         logger.debug("Applying top of book changed event", trade_event=event)
 
-    @apply.register
-    def _(self, event: OrderRested) -> None:
+    def _apply_order_rested(self, event: OrderRested) -> None:
         logger.debug("Applying order rested event", trade_event=event)
 
-    @apply.register
-    def _(self, event: FundsCredited) -> None:
+    def _apply_funds_credited(self, event: FundsCredited) -> None:
         logger.debug("Applying funds credited event", trade_event=event)
         self.accounts[(event.account_id, event.asset)] += event.amount.lots
 
-    @apply.register
-    def _(self, event: FundsReserved) -> None:
+    def _apply_funds_reserved(self, event: FundsReserved) -> None:
         logger.debug("Applying funds reserved event", trade_event=event)
         if self.accounts[(event.account_id, event.asset)] < event.amount.lots:
             raise ValueError(f"Insufficient funds for account {event.account_id!r}")
         self.accounts[(event.account_id, event.asset)] -= event.amount.lots
         self.accounts_held[(event.account_id, event.asset)] += event.amount.lots
 
-    @apply.register
-    def _(self, event: FundsReleased) -> None:
+    def _apply_funds_released(self, event: FundsReleased) -> None:
         logger.debug("Applying funds released event", trade_event=event)
         if self.accounts_held[(event.account_id, event.asset)] < event.amount.lots:
             raise ValueError(

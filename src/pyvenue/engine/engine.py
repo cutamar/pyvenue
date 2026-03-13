@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from functools import singledispatchmethod
 
 import structlog
 
@@ -185,13 +184,19 @@ class Engine:
                     engine.book.apply_event(e)
         return engine
 
-    @singledispatchmethod
     def handle(self, command: Command) -> list[Event]:
-        self.logger.warning("Unsupported command", command=command)
-        raise TypeError(f"Unsupported command {type(command)!r}")
+        t = type(command)
+        if t is PlaceMarket:
+            return self._handle_place_market(command)
+        elif t is PlaceLimit:
+            return self._handle_place_limit(command)
+        elif t is Cancel:
+            return self._handle_cancel(command)
+        else:
+            self.logger.warning("Unsupported command", command=command)
+            raise TypeError(f"Unsupported command {t!r}")
 
-    @handle.register
-    def _(self, command: PlaceMarket) -> list[Event]:
+    def _handle_place_market(self, command: PlaceMarket) -> list[Event]:
         self.logger.debug("Handling PlaceMarket command", command=command)
         if command.qty.lots <= 0:
             self.logger.warning(
@@ -282,8 +287,7 @@ class Engine:
                 )
         return events
 
-    @handle.register
-    def _(self, command: PlaceLimit) -> list[Event]:
+    def _handle_place_limit(self, command: PlaceLimit) -> list[Event]:
         self.logger.debug("Handling PlaceLimit command", command=command)
         asset = self.resolve_assets(command.instrument)[command.side]
         if command.qty.lots <= 0:
@@ -430,8 +434,7 @@ class Engine:
                     )
         return events
 
-    @handle.register
-    def _(self, command: Cancel) -> list[Event]:
+    def _handle_cancel(self, command: Cancel) -> list[Event]:
         self.logger.debug("Handling Cancel command", command=command)
         record = self.state.orders.get(command.order_id)
         if record is None:
