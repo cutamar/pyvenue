@@ -185,16 +185,15 @@ class Engine:
         return engine
 
     def handle(self, command: Command) -> list[Event]:
-        t = type(command)
-        if t is PlaceMarket:
+        if isinstance(command, PlaceMarket):
             return self._handle_place_market(command)
-        elif t is PlaceLimit:
+        elif isinstance(command, PlaceLimit):
             return self._handle_place_limit(command)
-        elif t is Cancel:
+        elif isinstance(command, Cancel):
             return self._handle_cancel(command)
         else:
             self.logger.warning("Unsupported command", command=command)
-            raise TypeError(f"Unsupported command {t!r}")
+            raise TypeError(f"Unsupported command {type(command)!r}")
 
     def _handle_place_market(self, command: PlaceMarket) -> list[Event]:
         self.logger.debug("Handling PlaceMarket command", command=command)

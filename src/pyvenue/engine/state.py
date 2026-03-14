@@ -150,29 +150,28 @@ class EngineState:
             self.apply(e)
 
     def apply(self, event: Event) -> None:
-        t = type(event)
-        if t is OrderAccepted:
+        if isinstance(event, OrderAccepted):
             self._apply_order_accepted(event)
-        elif t is TradeOccurred:
+        elif isinstance(event, TradeOccurred):
             self._apply_trade_occurred(event)
-        elif t is OrderCanceled:
+        elif isinstance(event, OrderCanceled):
             self._apply_order_canceled(event)
-        elif t is OrderExpired:
+        elif isinstance(event, OrderExpired):
             self._apply_order_expired(event)
-        elif t is OrderRested:
+        elif isinstance(event, OrderRested):
             self._apply_order_rested(event)
-        elif t is FundsReserved:
+        elif isinstance(event, FundsReserved):
             self._apply_funds_reserved(event)
-        elif t is FundsReleased:
+        elif isinstance(event, FundsReleased):
             self._apply_funds_released(event)
-        elif t is FundsCredited:
+        elif isinstance(event, FundsCredited):
             self._apply_funds_credited(event)
-        elif t is OrderRejected:
+        elif isinstance(event, OrderRejected):
             self._apply_order_rejected(event)
-        elif t is TopOfBookChanged:
+        elif isinstance(event, TopOfBookChanged):
             self._apply_top_of_book_changed(event)
         else:
-            raise TypeError(f"Unsupported event: {t!r}")
+            raise TypeError(f"Unsupported event: {type(event)!r}")
 
     def _apply_order_accepted(self, event: OrderAccepted) -> None:
         logger.debug("Applying order accepted event", trade_event=event)
