@@ -113,18 +113,6 @@ class OrderBook:
     def top_of_book(self) -> tuple[int | None, int | None]:
         return self.best_bid(), self.best_ask()
 
-    def _log_book(self) -> None:
-        self.logger.debug(
-            "Order book state",
-            num_bids=len(self.bids),
-            num_asks=len(self.asks),
-            num_orders=len(self.orders_by_id),
-            num_bid_levels=len(self.bid_prices),
-            num_ask_levels=len(self.ask_prices),
-            best_bid=self.best_bid(),
-            best_ask=self.best_ask(),
-        )
-
     def apply_event(self, event: Event) -> None:
         if isinstance(event, OrderRested):
             self._rest(
@@ -196,7 +184,6 @@ class OrderBook:
     def place_limit(
         self, order: RestingOrder, rest: bool = True
     ) -> tuple[list[Fill], int, list[OrderId]]:
-        self._log_book()
         self.logger.debug("Placing limit order in the book", order=order)
         if order.instrument != self.instrument:
             raise ValueError("Order instrument does not match book instrument")
@@ -210,11 +197,9 @@ class OrderBook:
             if rest:
                 self._rest(order)
         self.logger.debug("Limit order placed in the book", remaining=remaining)
-        self._log_book()
         return fills, remaining, cancels
 
     def cancel(self, order_id: OrderId) -> bool:
-        self._log_book()
         self.logger.debug("Canceling order in the book", order_id=order_id)
         loc = self.orders_by_id.get(order_id, None)
         if loc is None:
@@ -237,7 +222,6 @@ class OrderBook:
         else:
             raise RuntimeError(f"Invalid side: {side}")
         self.orders_by_id.pop(order_id, None)
-        self._log_book()
         return True
 
     def _ensure_level(self, side: Side, price_ticks: int) -> PriceLevel:

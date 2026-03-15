@@ -82,7 +82,11 @@ class Engine:
         return {Side.BUY: Asset(quote), Side.SELL: Asset(base)}
 
     def submit(self, command: Command) -> list[Event]:
-        self.logger.debug("Submitting command", command=command)
+        self.logger.debug(
+            "Submitting command",
+            order_id=getattr(command, "order_id", None),
+            account_id=getattr(command, "account_id", None),
+        )
         if command.instrument != self.instrument:
             self.logger.warning(
                 "Command rejected: instrument mismatch", command=command
@@ -192,11 +196,19 @@ class Engine:
         elif isinstance(command, Cancel):
             return self._handle_cancel(command)
         else:
-            self.logger.warning("Unsupported command", command=command)
+            self.logger.warning(
+                "Unsupported command",
+                order_id=getattr(command, "order_id", None),
+                account_id=getattr(command, "account_id", None),
+            )
             raise TypeError(f"Unsupported command {type(command)!r}")
 
     def _handle_place_market(self, command: PlaceMarket) -> list[Event]:
-        self.logger.debug("Handling PlaceMarket command", command=command)
+        self.logger.debug(
+            "Handling PlaceMarket command",
+            order_id=getattr(command, "order_id", None),
+            account_id=getattr(command, "account_id", None),
+        )
         if command.qty.lots <= 0:
             self.logger.warning(
                 "PlaceMarket command rejected: qty must be > 0", command=command
@@ -287,7 +299,11 @@ class Engine:
         return events
 
     def _handle_place_limit(self, command: PlaceLimit) -> list[Event]:
-        self.logger.debug("Handling PlaceLimit command", command=command)
+        self.logger.debug(
+            "Handling PlaceLimit command",
+            order_id=getattr(command, "order_id", None),
+            account_id=getattr(command, "account_id", None),
+        )
         asset = self.resolve_assets(command.instrument)[command.side]
         if command.qty.lots <= 0:
             self.logger.warning(
@@ -434,7 +450,11 @@ class Engine:
         return events
 
     def _handle_cancel(self, command: Cancel) -> list[Event]:
-        self.logger.debug("Handling Cancel command", command=command)
+        self.logger.debug(
+            "Handling Cancel command",
+            order_id=getattr(command, "order_id", None),
+            account_id=getattr(command, "account_id", None),
+        )
         record = self.state.orders.get(command.order_id)
         if record is None:
             self.logger.warning(
@@ -444,7 +464,11 @@ class Engine:
                 self._reject(command.instrument, command.order_id, "unknown order_id")
             ]
         if record.account_id != command.account_id:
-            self.logger.warning("Cancel command rejected: forbidden", command=command)
+            self.logger.warning(
+                "Cancel command rejected: forbidden",
+                order_id=getattr(command, "order_id", None),
+                account_id=getattr(command, "account_id", None),
+            )
             return [self._reject(command.instrument, command.order_id, "forbidden")]
         if record.status != OrderStatus.ACTIVE:
             self.logger.warning(

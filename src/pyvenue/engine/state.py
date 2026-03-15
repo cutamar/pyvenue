@@ -76,9 +76,6 @@ class EngineState:
         self.quote_asset = quote_asset
         self.fee_schedule = fee_schedule
 
-    def _log_state(self) -> None:
-        logger.debug("Engine state", orders=self.orders)
-
     def available(self, account: AccountId, asset: Asset) -> int:
         return self.accounts[(account, asset)]
 
@@ -174,7 +171,11 @@ class EngineState:
             raise TypeError(f"Unsupported event: {type(event)!r}")
 
     def _apply_order_accepted(self, event: OrderAccepted) -> None:
-        logger.debug("Applying order accepted event", trade_event=event)
+        logger.debug(
+            "Applying order accepted event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         self.orders[event.order_id] = OrderRecord(
             instrument=event.instrument,
             order_id=event.order_id,
@@ -185,17 +186,23 @@ class EngineState:
             remaining=event.qty,
             status=OrderStatus.ACTIVE,
         )
-        self._log_state()
 
     def _apply_order_canceled(self, event: OrderCanceled) -> None:
-        logger.debug("Applying order canceled event", trade_event=event)
+        logger.debug(
+            "Applying order canceled event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         record = self.orders.get(event.order_id)
         if record is not None:
             record.status = OrderStatus.CANCELED
-        self._log_state()
 
     def _apply_trade_occurred(self, event: TradeOccurred) -> None:
-        logger.debug("Applying trade occurred event", trade_event=event)
+        logger.debug(
+            "Applying trade occurred event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         for order_id in (event.taker_order_id, event.maker_order_id):
             record = self.orders.get(order_id)
             if record is None:
@@ -229,38 +236,63 @@ class EngineState:
                 self.accounts[(record.account_id, pay_asset)] -= pay_qty
         self.process_trade_fees(event)
 
-        self._log_state()
-
     def _apply_order_expired(self, event: OrderExpired) -> None:
-        logger.debug("Applying order expired event", trade_event=event)
+        logger.debug(
+            "Applying order expired event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         record = self.orders.get(event.order_id)
         if record is not None:
             record.status = OrderStatus.EXPIRED
-        self._log_state()
 
     def _apply_order_rejected(self, event: OrderRejected) -> None:
         # nothing to do in this case
-        logger.debug("Applying order rejected event", trade_event=event)
+        logger.debug(
+            "Applying order rejected event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
 
     def _apply_top_of_book_changed(self, event: TopOfBookChanged) -> None:
-        logger.debug("Applying top of book changed event", trade_event=event)
+        logger.debug(
+            "Applying top of book changed event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
 
     def _apply_order_rested(self, event: OrderRested) -> None:
-        logger.debug("Applying order rested event", trade_event=event)
+        logger.debug(
+            "Applying order rested event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
 
     def _apply_funds_credited(self, event: FundsCredited) -> None:
-        logger.debug("Applying funds credited event", trade_event=event)
+        logger.debug(
+            "Applying funds credited event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         self.accounts[(event.account_id, event.asset)] += event.amount.lots
 
     def _apply_funds_reserved(self, event: FundsReserved) -> None:
-        logger.debug("Applying funds reserved event", trade_event=event)
+        logger.debug(
+            "Applying funds reserved event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         if self.accounts[(event.account_id, event.asset)] < event.amount.lots:
             raise ValueError(f"Insufficient funds for account {event.account_id!r}")
         self.accounts[(event.account_id, event.asset)] -= event.amount.lots
         self.accounts_held[(event.account_id, event.asset)] += event.amount.lots
 
     def _apply_funds_released(self, event: FundsReleased) -> None:
-        logger.debug("Applying funds released event", trade_event=event)
+        logger.debug(
+            "Applying funds released event",
+            order_id=getattr(event, "order_id", None),
+            account_id=getattr(event, "account_id", None),
+        )
         if self.accounts_held[(event.account_id, event.asset)] < event.amount.lots:
             raise ValueError(
                 f"Insufficient held funds for account {event.account_id!r}"
