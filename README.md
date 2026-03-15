@@ -59,3 +59,22 @@ pyright
 # tests
 pytest -q
 ```
+
+## Logging Configuration
+
+Pyvenue uses structured JSON logging via `structlog`, which integrates seamlessly with the Python standard `logging` module. 
+
+The logging behavior is fully controlled via environment variables:
+
+- `PYVENUE_LOG_LEVEL`: Controls the verbosity of the engine.
+  - `INFO` (Default): Logs high-level startup events and errors. Recommended for maximum matching performance.
+  - `DEBUG`: Logs extremely granular structural state changes, such as every individual trade ledger update, matched order ID, funds reserved, and command handled. **Warning: Do not use `DEBUG` in high-throughput performance testing, as the I/O will bottleneck the matcher.**
+  
+- `PYVENUE_LOG_JSON`: Controls the formatting output stream.
+  - `0` (Default): Outputs human-readable, colorized `ConsoleRenderer` logs for local development.
+  - `1`: Outputs strict JSON log lines. Recommended for production log ingestion (like Datadog or ELK).
+
+Example usage:
+```bash
+PYVENUE_LOG_LEVEL=DEBUG PYVENUE_LOG_JSON=1 python src/pyvenue/bench/bench_orderflow.py
+```
